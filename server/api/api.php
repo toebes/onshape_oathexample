@@ -56,7 +56,7 @@ function oalog($logstr) {
 // Open any log file if needed
 openalog();
 
-oalog("\n****Making request V1.0.2\n");
+oalog("\n****Making request V1.0.3\n");
 oalog(print_r($_SERVER, true)."\n");
 
 // Get the path to our script
@@ -97,6 +97,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
     'Content-Type: '.$content_type,
     'sec-ch-ua-platform: '.$platform,
     'authorization: '.$authorization,
+    'method: '.$method,
     'accept: '.$accept
     ));
 
@@ -104,37 +105,35 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, array(
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 curl_setopt($ch, CURLINFO_HEADER_OUT, true);
 curl_setopt($ch, CURLINFO_HEADER, true);
-// curl_setopt($ch, CURLOPT_POSTFIELDS, "grant_type=authorization_code"
-// //                                     ."&code=" . urlencode($code)
-//                                     ."&client_id=" . urlencode($client_id)
-//                                     ."&client_secret=" . urlencode($client_secret));
-
-// Dump out the headers so we can confirm what we asked for
-$headers = curl_getinfo($curl, CURLINFO_HEADER_OUT);
-oalog("HEADERS:\n".$headers."\n");
 
 // Make the request
 $response = curl_exec($ch);
 $err = curl_error($ch);
 
+// Dump out the headers so we can confirm what we asked for
+$headers = curl_getinfo($ch, CURLINFO_HEADER_OUT);
+oalog("HEADERS:\n".$headers."\n");
 
-  // Make the request
-  $response = curl_exec($ch);
-  $err = curl_error($ch);
+// Log what we got back
+$limit = strlen($response);
+if ($limit > 80) {
+  $limit = 80;
+}
+$out = "";
+for ($i = 0; $i < $limit; $i++) {
+    $out .= str_pad(dechex(ord($response[$i])), 2, '0', STR_PAD_LEFT);
+}
 
-  // Log what we got back
-  oalog("RESPONSE:\n".$response."\nERR: ".$err."\n");
+oalog("RESPONSE:\n".$out."\nERR: ".$err."\n");
 
-  // Log all the information about the request/response
-  $info = curl_getinfo($ch);
-  oalog("INFO:\n".print_r($info, TRUE));
+// Log all the information about the request/response
+$info = curl_getinfo($ch);
+oalog("INFO:\n".print_r($info, TRUE));
 
-  curl_close($ch);
+curl_close($ch);
 
-  header('Content-Type: application/json; charset=utf-8');
-//   echo json_encode($data);
-  echo $response;
+header('Content-Type: '.$info['content_type']);
+echo $response;
   
 // Close the log file
 closealog();
-?>
