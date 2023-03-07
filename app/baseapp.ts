@@ -29,6 +29,7 @@
 'use strict';
 
 import { ExchangeToken, IExchangeToken } from './oauth';
+import { thumbnailItem } from './onshape';
 
 /**
  * BaseApp contains all the support routines that your application will need.
@@ -80,6 +81,73 @@ export class BaseApp {
         }
     }
     /**
+     * Get a thumbnail for an Onshape hosted image
+     * This addresses the issue where we want to do <img src="https://cad.onshape.com/...">
+     * But it can't be displayed by the browser because we don't have the Bearer token on the request
+     *
+     * @param thumbnail thumbnailItem information to be retrieved
+     * @param height Height of the rendered image (default = 60)
+     * @param width Width of the rendered image (default = 60)
+     * @returns base 64 image data string
+     */
+    public getThumbnail(
+        thumbnail: thumbnailItem,
+        height: number = 60,
+        width: number = 60
+    ): Promise<string> {
+        return new Promise((resolve, reject) => {
+            // TODO: Walk through the list of sizes to see if any are ideal for what we want
+            // For now we use the default URL and tell them to resize it on the fly for us
+            let tryurl = thumbnail.href;
+            if (thumbnail.sizes !== undefined && thumbnail.sizes.length > 0) {
+                tryurl = thumbnail.sizes[0].href;
+            }
+            let xhr = new XMLHttpRequest();
+
+            if (tryurl === null) {
+                resolve(
+                    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAAy0lEQVRIie2VXQ6CMBCEP7yDXkEjeA/x/icQgrQcAh9czKZ0qQgPRp1kk4ZZZvYnFPhjJi5ABfRvRgWUUwZLxIe4asEsMOhndmzhqbtZSdDExxh0EhacRBIt46V5oJDwEd4BuYQjscc90ATiJ8UfgFvEXPNNqotCKtEvF8HZS87wLAeOijeRTwhahsNoWmVi4pWRhLweqe4qCp1kLVUv3UX4VgtaX7IXbmsU0knuzuCz0SEwWIovvirqFTSrKbLkcZ8v+RecVyjyl3AHdAl3ObMLisAAAAAASUVORK5CYII='
+                );
+                return;
+            }
+            let url = this.myserver + this.fixOnshapeURI(tryurl);
+            if (url.indexOf('?') < 0) {
+                url += '?';
+            } else {
+                url += '&';
+            }
+            url += `outputHeight=${height}&outputWidth=${width}&pixelSize=0`;
+
+            xhr.open('GET', url, true);
+            xhr.setRequestHeader(
+                'Authorization',
+                'Bearer ' + this.access_token
+            );
+            xhr.setRequestHeader('X-Server', this.server);
+            // We want to get a blob so that it isn't UTF-8 encoded along the way
+            xhr.responseType = 'blob';
+
+            xhr.onreadystatechange = () => {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        // Parse out the downloaded image into a data URL (this automatically base64 encodes it)
+                        var reader = new FileReader();
+                        reader.readAsDataURL(xhr.response);
+                        reader.onloadend = function () {
+                            resolve(reader.result.toString());
+                        };
+                    } else {
+                        // Something wennt wrong so give them a blank image
+                        resolve(
+                            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAAy0lEQVRIie2VXQ6CMBCEP7yDXkEjeA/x/icQgrQcAh9czKZ0qQgPRp1kk4ZZZvYnFPhjJi5ABfRvRgWUUwZLxIe4asEsMOhndmzhqbtZSdDExxh0EhacRBIt46V5oJDwEd4BuYQjscc90ATiJ8UfgFvEXPNNqotCKtEvF8HZS87wLAeOijeRTwhahsNoWmVi4pWRhLweqe4qCp1kLVUv3UX4VgtaX7IXbmsU0knuzuCz0SEwWIovvirqFTSrKbLkcZ8v+RecVyjyl3AHdAl3ObMLisAAAAAASUVORK5CYII='
+                        );
+                    }
+                }
+            };
+            xhr.send();
+        });
+    }
+    /**
      * Request refreshing the token because it has expired
      */
     public refreshtoken(): void {
@@ -125,15 +193,7 @@ export class BaseApp {
                 if (xhr.readyState === 4) {
                     if (xhr.status === 200) {
                         const jsonresult = JSON.parse(xhr.responseText);
-                        // if (
-                        //     xmlDoc.getElementsByTagName('InvalidTokenException')
-                        //         .length > 0
-                        // ) {
-                        //     console.log('Invalid Token - need to refresh');
-                        //     this.refreshtoken();
-                        // } else {
                         resolve(jsonresult);
-                        // }
                     } else {
                         reject(xhr.responseText);
                     }

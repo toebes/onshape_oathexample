@@ -26,100 +26,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 import { BaseApp } from './baseapp';
-
-export interface documentSummary {
-    jsonType: string;
-    public: boolean;
-    permission: string;
-    defaultElementId: string;
-    recentVersion: string;
-    hasRelevantInsertables: boolean;
-    canUnshare: boolean;
-    userAccountLimitsBreached: boolean;
-    supportTeamUserAndShared: boolean;
-    isUsingManagedWorkflow: boolean;
-    likedByCurrentUser: boolean;
-    sequence: string;
-    tags: string[];
-    documentType: number;
-    projectId: string;
-    thumbnail: {
-        sizes: string[];
-        secondarySizes: string[];
-        id: string;
-        href: string;
-    };
-    defaultWorkspace: {
-        canDelete: boolean;
-        isReadOnly: boolean;
-        parent: string;
-        type: string;
-        lastModifier: string;
-        description: string;
-        creator: string;
-        modifiedAt: string;
-        documentId: string;
-        createdAt: string;
-        thumbnail: string;
-        microversion: string;
-        parents: string;
-        overrideDate: string;
-        name: string;
-        id: string;
-        href: string;
-    };
-    parentId: string;
-    permissionSet: string[];
-    trash: boolean;
-    totalWorkspacesUpdating: number;
-    totalWorkspacesScheduledForUpdate: number;
-    documentLabels: string;
-    numberOfTimesReferenced: number;
-    numberOfTimesCopied: number;
-    likes: number;
-    notes: string;
-    notRevisionManaged: boolean;
-    createdWithEducationPlan: boolean;
-    anonymousAccessAllowed: boolean;
-    anonymousAllowsExport: boolean;
-    trashedAt: string;
-    hasReleaseRevisionableObjects: boolean;
-    isOrphaned: boolean;
-    owner: {
-        type: number;
-        isEnterpriseOwnedResource: boolean;
-        image: string;
-        name: string;
-        id: string;
-        href: string;
-    };
-    unparentHref: string;
-    resourceType: string;
-    isMutable: boolean;
-    isContainer: boolean;
-    canMove: boolean;
-    description: string;
-    modifiedAt: string;
-    createdAt: string;
-    createdBy: {
-        state: number;
-        image: string;
-        name: string;
-        id: string;
-        href: string;
-    };
-    modifiedBy: {
-        state: number;
-        image: string;
-        name: string;
-        id: string;
-        href: string;
-    };
-    isEnterpriseOwned: boolean;
-    name: string;
-    id: string;
-    href: string;
-}
+import { documentSummary } from './onshape';
 
 export class App extends BaseApp {
     public myserver = 'https://ftconshape.com/oauthexample';
@@ -181,8 +88,13 @@ export class App extends BaseApp {
                 item.thumbnail.href !== undefined
             ) {
                 let img = document.createElement('img');
-                img.setAttribute('src', item.thumbnail.href);
-                img.setAttribute('height', '20');
+
+                //img.setAttribute('src', item.thumbnail.href);
+                // Ask onshape to give us a thumbnail image to fill in
+                this.getThumbnail(item.thumbnail, 40, 40).then((src) => {
+                    img.setAttribute('src', src);
+                });
+                img.setAttribute('height', '40');
                 li.appendChild(img);
             }
         }
