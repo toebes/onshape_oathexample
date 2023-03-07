@@ -1,4 +1,4 @@
-# onshape_oathexample
+# onshape_oauthexample
 Onshape Example Client using PHP
 
 This example shows how to create an Onshape client with a PHP backend (basically no server) and OAuth authentication.  All of the backend support is handled by simple PHP LAMHDAs.  To use this you need to
