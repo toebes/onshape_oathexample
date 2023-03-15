@@ -27,7 +27,11 @@
  */
 import { BaseApp } from './baseapp';
 import { JTmakeSelectList, JTSelectItem } from './common/jtselect';
-import { documentSummary } from './onshape';
+import {
+    BTGlobalTreeMagicNodeInfo,
+    BTGlobalTreeNodesInfo,
+    BTGlobalTreeNodesInfoFromJSON,
+} from 'onshape-typescript-fetch/models';
 
 export class App extends BaseApp {
     public myserver = 'https://ftconshape.com/oauthexample';
@@ -141,16 +145,14 @@ export class App extends BaseApp {
         ul.setAttribute('id', 'glist');
         dumpNodes.appendChild(ul);
         // Start the process off with the first in the magic list
-        this.processNode(
-            `/api/globaltreenodes/magic/${magic}?getPathToRoot=true&limit=50&sortColumn=modifiedAt&sortOrder=desc`
-        );
+        this.processNode(magic);
     }
     /**
      * Append a dump of elements to the current UI
      * @param items Items to append
      * @returns
      */
-    public appendElements(items: documentSummary[]): void {
+    public appendElements(items: BTGlobalTreeMagicNodeInfo[]): void {
         // Figure out where we are to add the entries
         let ul = document.getElementById('glist');
         if (ul === null) {
@@ -196,27 +198,13 @@ export class App extends BaseApp {
      * Process a single node entry
      * @param uri URI node for the entries to be loaded
      */
-    public processNode(uri: string) {
+    public processNode(magic: string) {
+        // uri: string) {
         // Get Onshape to return the list
-        this.OnshapeAPIasJSON(uri)
+        this.globaltreenodesapi
+            .globalTreeNodesMagic({ mid: magic })
             .then((res) => {
-                // When it does, append all the elements to the UI
-                this.appendElements(res.items);
-                // Do we have any more in the list and are we under the limit for the UI
-                if (
-                    res.next !== '' &&
-                    res.next !== undefined &&
-                    this.loaded < this.loadedlimit
-                ) {
-                    // Request the UI to jump to the next entry in the list.
-                    // By calling setTimeout we give the UI a little break
-                    setTimeout(() => {
-                        this.processNode(res.next);
-                    }, 10);
-                } else {
-                    // All done
-                    this.setRunning(false);
-                }
+                this.ProcessNodeResults(res);
             })
             .catch((err) => {
                 // Something went wrong, some mark us as no longer running.
@@ -224,6 +212,31 @@ export class App extends BaseApp {
                 this.setRunning(false);
             });
     }
+    public ProcessNodeResults(res: BTGlobalTreeNodesInfo) {
+        const nodes = res as BTGlobalTreeNodesInfo;
+        // When it does, append all the elements to the UI
+        this.appendElements(nodes.items);
+        // Do we have any more in the list and are we under the limit for the UI
+        if (
+            res.next !== '' &&
+            res.next !== undefined &&
+            this.loaded < this.loadedlimit
+        ) {
+            // Request the UI to jump to the next entry in the list.
+            // By calling setTimeout we give the UI a little break
+            // setTimeout(() => {
+            this.OnshapeRequest(res.next, BTGlobalTreeNodesInfoFromJSON).then(
+                (res) => {
+                    this.ProcessNodeResults(res as BTGlobalTreeNodesInfo);
+                }
+            );
+            // }, 10);
+        } else {
+            // All done
+            this.setRunning(false);
+        }
+    }
+
     /**
      * Handle when an app is unable to authenticate or has any other problem when starting
      * @param reason Reason for initialization failure

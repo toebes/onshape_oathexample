@@ -29,7 +29,9 @@
 'use strict';
 
 import { ExchangeToken, IExchangeToken } from './oauth';
-import { thumbnailItem } from './onshape';
+import * as runtime from 'onshape-typescript-fetch/runtime';
+import { URLApi } from './urlapi';
+import { GlobalTreeNodesApi, BTThumbnailInfo } from 'onshape-typescript-fetch';
 
 /**
  * BaseApp contains all the support routines that your application will need.
@@ -53,6 +55,10 @@ export class BaseApp {
     public access_token: string;
     public refresh_token: string;
     public expires_token: Date;
+
+    public globaltreenodesapi: GlobalTreeNodesApi;
+    public urlAPI: URLApi;
+    public configuration: runtime.Configuration;
 
     /**
      * Handle any post messages sent to us
@@ -91,7 +97,7 @@ export class BaseApp {
      * @returns base 64 image data string
      */
     public getThumbnail(
-        thumbnail: thumbnailItem,
+        thumbnail: BTThumbnailInfo,
         height: number = 60,
         width: number = 60
     ): Promise<string> {
@@ -172,37 +178,6 @@ export class BaseApp {
         xhr.send();
     }
     /**
-     * Make a request to Onshape
-     * @param request
-     */
-    public OnshapeAPIasJSON(request: string): Promise<any> {
-        request = this.fixOnshapeURI(request);
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            const url = this.myserver + request;
-            xhr.open('GET', url, true);
-            console.log(`Requesting ${url}`);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader(
-                'Authorization',
-                'Bearer ' + this.access_token
-            );
-            xhr.setRequestHeader('X-Server', this.server);
-
-            xhr.onreadystatechange = () => {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200) {
-                        const jsonresult = JSON.parse(xhr.responseText);
-                        resolve(jsonresult);
-                    } else {
-                        reject(xhr.responseText);
-                    }
-                }
-            };
-            xhr.send();
-        });
-    }
-    /**
      *
      * @param uri URI returned from Onshape
      * @returns Cleaned up URI that can be passed to
@@ -234,6 +209,53 @@ export class BaseApp {
         h2.innerHTML = 'Initializing';
         this.setAppElements(h2);
     }
+
+    /**
+     * Returns a list of all the elements in one of several globally defined lists. Known values include: | MAGIC ID | TITLE | USAGE | |-|-|-| | 0 | Recently Opened | Most recently opened documents | | 1 | My Onshape | Root folder and contents | | 2 | Created by Me | Documents created by the logged in user | | 3 | Public | All public documents (a very long list) | | 4 | Trash | Trashcan for the logged in user | | 5 | Tutorials & Samples | Desktop Tutorials | | 6 | FeatureScript samples |  FeatureScript samples (found when you select Other documents while adding a custom feature) | | 7 | Community spotlight | Community spotlight (found when you select Other documents while adding a custom feature) | | 8 | Tutorials | IOS Tutorials | | 9 | Tutorials | Android Tutorials | | 10 | Labels | Labels created by the user  | | 11 | Teams | Teams that the user is connected to | | 12 | Shared with me | Documents shared with the user | | 13 | Cloud Storage | Visual list of cloud accounts associated with the logged in user | | 14 | Custom table samples | Custom table samples (found when you select Other documents while adding a custom table) |
+     * Get Tree Node List
+     */
+    public async OnshapeRequest(
+        url: string,
+        infoFromJSON: (json: any) => any,
+        method: runtime.HTTPMethod = 'GET',
+        initOverrides?: RequestInit | runtime.InitOverrideFunction
+    ): Promise<any> {
+        console.log(`***Onshape Resuest ${url}`);
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            // oauth required
+            headerParameters['Authorization'] =
+                await this.configuration.accessToken('OAuth2', ['OAuth2Read']);
+        }
+
+        if (
+            this.configuration &&
+            (this.configuration.username !== undefined ||
+                this.configuration.password !== undefined)
+        ) {
+            headerParameters['Authorization'] =
+                'Basic ' +
+                btoa(
+                    this.configuration.username +
+                        ':' +
+                        this.configuration.password
+                );
+        }
+
+        const response = await this.urlAPI.request({
+            path: this.fixOnshapeURI(url),
+            method: method,
+            headers: headerParameters,
+            query: {},
+        });
+
+        const result = new runtime.JSONApiResponse(response, (jsonValue) =>
+            infoFromJSON(jsonValue)
+        );
+        return await result.value();
+    }
+
     /**
      * Initialize the app because we have gotten permission from Onshape to access content
      * @param access_token Access token returned by Onshape
@@ -244,6 +266,25 @@ export class BaseApp {
         this.access_token = access_token;
         this.refresh_token = refresh_token;
         this.expires_token = expires;
+
+        this.configuration = new runtime.Configuration({
+            basePath: this.myserver, // override base path
+            // middleware?: Middleware[]; // middleware to apply before/after fetch requests
+            accessToken: (
+                name?: string,
+                scopes?: string[]
+            ): Promise<string> => {
+                return new Promise<string>((resolve, reject) => {
+                    // TODO: Check lifetime of bearer token and if needed request a new one
+                    resolve('Bearer ' + this.access_token);
+                });
+            },
+            headers: { 'X-Server': this.server },
+            //header params we want to use on every request
+        });
+
+        this.urlAPI = new URLApi(this.configuration);
+        this.globaltreenodesapi = new GlobalTreeNodesApi(this.configuration);
 
         this.ListenForAppClicks();
         this.AddPostMessageListener();

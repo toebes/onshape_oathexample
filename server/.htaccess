@@ -7,6 +7,9 @@ RewriteRule ^(.*)/api/(.*)$ $1/api.php/?p1=$2 [L]
 RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
+RewriteCond %{REQUEST_FILENAME} /confirm_access
+RewriteRule ^.*/confirm_access/(.*)$ https://oauth.onshape.com/oauth/confirm_access$2 [L,R=301]
+
 <ifModule mod_headers.c>
     Header set Access-Control-Allow-Origin: *
 </ifModule>

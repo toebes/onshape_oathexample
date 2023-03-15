@@ -14,10 +14,12 @@
   "license": "ISC",
   "devDependencies": {
     "filemanager-webpack-plugin": "^8.0.0",
+    "ts-loader": "^9.4.2",
+    "typescript": "^4.9.5",
     "webpack-cli": "^5.0.1"
   },
   "dependencies": {
     "js-cookie": "^3.0.1",
-    "onshape-clients": "github:onshape-public/onshape-clients"
+    "onshape-typescript-fetch": "github:toebes/onshape-typescript-fetch"
   }
 }

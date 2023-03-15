@@ -102,8 +102,18 @@ config = {
             {
                 test: /\.tsx?$/,
                 loader: 'ts-loader',
-                include: [path.resolve(__dirname, 'app')],
-                exclude: [path.resolve(__dirname, 'node_modules')],
+                options: {
+                    transpileOnly: true,
+                },
+                include: [
+                    path.resolve(__dirname, 'app'),
+                    path.resolve(
+                        __dirname,
+                        'node_modules',
+                        'onshape-typescript-fetch'
+                    ),
+                ],
+                //               exclude: [path.resolve(__dirname, 'node_modules')],
             },
             // With the special case of allowing the qr-code-generator to sit in the
             // npm directory it was installed from.
