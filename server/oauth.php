@@ -68,7 +68,6 @@ function getToken($code){
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
   curl_setopt($ch, CURLOPT_POST, 1);
   curl_setopt($ch, CURLINFO_HEADER_OUT, true);
-  curl_setopt($ch, CURLINFO_HEADER, true);
   curl_setopt($ch, CURLOPT_POSTFIELDS, "grant_type=authorization_code"
                                       ."&code=" . urlencode($code)
                                       ."&client_id=" . urlencode($client_id)
@@ -79,7 +78,7 @@ function getToken($code){
   curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
   // Dump out the headers so we can confirm what we asked for
-  $headers = curl_getinfo($curl, CURLINFO_HEADER_OUT);
+  $headers = curl_getinfo($ch, CURLINFO_HEADER_OUT);
   oalog("HEADERS:\n".$headers."\n");
 
   // Make the request
@@ -145,4 +144,3 @@ $result = getToken($authorization_code, $logfile);
 // Close the log file
 closealog();
 echo $result;
-?>
