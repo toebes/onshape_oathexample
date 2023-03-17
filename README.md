@@ -11,7 +11,7 @@ This example shows how to create an Onshape client with a PHP backend (basically
 1. For the settings in the Redirect URLs, point it to the location of the backend components (in this case `https://ftconshape.com/oauthexample/`)
 1. Create an extension entry (we are using an Element Right Panel here) and for the action URL, enter the following.  Note that you need to replace `<clientid>` with the client id you got in step 3 and the `<backenduri>` from step 2 but with the URL encoded (you can use https://www.urlencoder.org/ to encode the URL).  While you are there, don't forget to update the icon with a `.svg` file.
 
-     `https://oauth.onshape.com/oauth/confirm_access?response_type=code&client_id=<clientid>%3D&redirect_uri=<backenduri>%3FdocumentId%3D{$documentId}%26workspaceId%3D{$workspaceOrVersionId}%26elementId%3D{$elementId}`
+     `https://oauth.onshape.com/oauth/authorize?response_type=code&client_id=<clientid>%3D&redirect_uri=<backenduri>%3FdocumentId%3D{$documentId}%26workspaceId%3D{$workspaceOrVersionId}%26elementId%3D{$elementId}`
 
 1. Change the line in app/app.ts for myserver to be the server from step 1 (but leave off the trailing /)
    ```

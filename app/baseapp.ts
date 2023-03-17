@@ -211,8 +211,12 @@ export class BaseApp {
     }
 
     /**
-     * Returns a list of all the elements in one of several globally defined lists. Known values include: | MAGIC ID | TITLE | USAGE | |-|-|-| | 0 | Recently Opened | Most recently opened documents | | 1 | My Onshape | Root folder and contents | | 2 | Created by Me | Documents created by the logged in user | | 3 | Public | All public documents (a very long list) | | 4 | Trash | Trashcan for the logged in user | | 5 | Tutorials & Samples | Desktop Tutorials | | 6 | FeatureScript samples |  FeatureScript samples (found when you select Other documents while adding a custom feature) | | 7 | Community spotlight | Community spotlight (found when you select Other documents while adding a custom feature) | | 8 | Tutorials | IOS Tutorials | | 9 | Tutorials | Android Tutorials | | 10 | Labels | Labels created by the user  | | 11 | Teams | Teams that the user is connected to | | 12 | Shared with me | Documents shared with the user | | 13 | Cloud Storage | Visual list of cloud accounts associated with the logged in user | | 14 | Custom table samples | Custom table samples (found when you select Other documents while adding a custom table) |
-     * Get Tree Node List
+     * Call a generic URL returned from an Onshape response and transform it to the correct type
+     * @param url Url to call
+     * @param infoFromJSON Transformation function pointer that takes a JSON result and converts it to the right type
+     * @param method  'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'HEAD' Default='GET'
+     * @param initOverrides Any overrides specific to this one request
+     * @returns A promise that will return the result of the call
      */
     public async OnshapeRequest(
         url: string,
@@ -220,7 +224,7 @@ export class BaseApp {
         method: runtime.HTTPMethod = 'GET',
         initOverrides?: RequestInit | runtime.InitOverrideFunction
     ): Promise<any> {
-        console.log(`***Onshape Resuest ${url}`);
+        console.log(`***Onshape Request ${url}`);
         const headerParameters: runtime.HTTPHeaders = {};
 
         if (this.configuration && this.configuration.accessToken) {
