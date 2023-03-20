@@ -1056,7 +1056,7 @@ export function createSVGIcon(icon: OnshapeSVGIcon, iconclass?: string) {
     if (iconclass !== undefined) {
         svg.classList.add(iconclass);
     }
-    use.setAttribute('href', './onshape/icons.svg#' + String(icon));
+    use.setAttribute('href', '#' + String(icon));
     svg.appendChild(use);
     return svg;
 }

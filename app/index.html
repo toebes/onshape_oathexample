@@ -14,6 +14,9 @@
     <% for (var index in htmlWebpackPlugin.files.js) { %>
         <script src="<%= htmlWebpackPlugin.files.js[index] %>"></script>
         <% } %>
+            <span class="defs_only">
+                <%= require('./onshape/icons.svg') %>
+            </span>
             <div id="top">
                 <div id="app">
                 </div>

@@ -87,10 +87,9 @@ config = {
                 use: ['style-loader', 'css-loader'],
             },
             // All .svg files are inlined
-            // But it doesn't actually seem to work
             {
                 test: /\.svg$/,
-                type: 'asset',
+                type: 'asset/source',
             },
         ],
     },
