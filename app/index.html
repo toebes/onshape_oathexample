@@ -2,6 +2,8 @@
 <html lang="en">
 
 <head>
+    <link href="https://cad.onshape.com/js/vendor-bundle.css" rel="stylesheet">
+    <link href="https://cad.onshape.com/css/woolsthorpe.css" rel="stylesheet">
     <meta charset="utf-8" />
     <title>
         <%= htmlWebpackPlugin.options.title %>
@@ -9,11 +11,9 @@
 </head>
 
 <body onload="doinit()">
-
     <% for (var index in htmlWebpackPlugin.files.js) { %>
         <script src="<%= htmlWebpackPlugin.files.js[index] %>"></script>
         <% } %>
-
             <div id="top">
                 <div id="app">
                 </div>

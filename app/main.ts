@@ -27,6 +27,11 @@
  */
 'use strict';
 
+import 'bootstrap/dist/css/bootstrap.min.css';
+import './app.css';
+
+//import './onshape/icons.v1.4.219.min.svg';
+
 import { App } from './app';
 
 declare let window: any;

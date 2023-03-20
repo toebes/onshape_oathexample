@@ -59,42 +59,8 @@ config = {
         clean: false,
     },
     resolve: {
-        alias: {
-            html5sortable: path.join(
-                __dirname,
-                'node_modules',
-                'html5sortable',
-                'dist',
-                'html5sortable.cjs.js'
-            ),
-            'datatables.css': path.join(
-                __dirname,
-                'node_modules',
-                'datatables.net-dt',
-                'css',
-                'jquery.dataTables.min.css'
-            ),
-            'datatables.foundation.css': path.join(
-                __dirname,
-                'node_modules',
-                'datatables.net-zf',
-                'css',
-                'dataTables.foundation.min.css'
-            ),
-        },
         modules: [__dirname, path.join(__dirname, 'node_modules')],
-        extensions: [
-            '.ts',
-            '.js',
-            '.css',
-            '.ttf',
-            '.eot',
-            '.woff',
-            '.woff2',
-            '.png',
-            '.svg',
-            '.json',
-        ],
+        extensions: ['.ts', '.js', '.css', '.eot', '.png', '.svg', '.json'],
     },
     module: {
         rules: [
@@ -113,95 +79,18 @@ config = {
                         'onshape-typescript-fetch'
                     ),
                 ],
-                //               exclude: [path.resolve(__dirname, 'node_modules')],
-            },
-            // With the special case of allowing the qr-code-generator to sit in the
-            // npm directory it was installed from.
-            {
-                test: /\.ts$/,
-                loader: 'ts-loader',
-                include: [
-                    path.join(
-                        __dirname,
-                        'node_modules',
-                        'qr-code-generator',
-                        'typescript-javascript',
-                        'qrcodegen.ts'
-                    ),
-                ],
-                options: { allowTsInNodeModules: true },
             },
             // All .css files are processed with the css-loader, style-loader
             {
                 test: /\.css$/,
                 include: __dirname,
-                use: [
-                    'style-loader',
-                    'css-loader',
-                    {
-                        loader: 'postcss-loader',
-                        options: {
-                            minify: true,
-                        },
-                    },
-                ],
+                use: ['style-loader', 'css-loader'],
             },
-            // All small .png files (mostly the icons for jqueryui) are inlined
-            // with the URL loader
+            // All .svg files are inlined
+            // But it doesn't actually seem to work
             {
-                test: /\.(png)$/,
-                use: {
-                    loader: 'url-loader',
-                    options: {
-                        limit: 8192,
-                        esModule: false,
-                    },
-                },
-            },
-            // All small .svg files (mostly the icons for the editor) are inlined
-            // with the URL loader
-            {
-                test: /\.(svg)$/,
-                use: {
-                    loader: 'svg-inline-loader',
-                    options: {
-                        limit: 20000,
-                        esModule: false,
-                    },
-                },
-            },
-            // All .woff and .woff2 fonts files are packed inline (unless they are
-            // larger than 1,000)
-            {
-                test: /\.woff(2)?(\?v=[0-9]\.[0-9]\.[0-9])?$/,
-                // loader: "url-loader?limit=1000&mimetype=application/font-woff",
-                use: {
-                    loader: 'file-loader',
-                    options: {
-                        name: 'font/[name].[ext]',
-                    },
-                },
-            },
-            // All ttf and eot files are kept in a standalone directory to load
-            // Eventually they should go away
-            {
-                test: /\.(ttf)$/,
-                use: {
-                    loader: 'file-loader',
-                    options: {
-                        name: 'font/[name].[ext]',
-                    },
-                },
-            },
-            {
-                // Exposes jQuery for use outside Webpack build
-                test: require.resolve('jquery'),
-                use: {
-                    loader: 'expose-loader',
-                    options: {
-                        exposes: ['$', 'jQuery'],
-                    },
-                },
+                test: /\.svg$/,
+                type: 'asset',
             },
         ],
     },
@@ -236,16 +125,7 @@ config = {
             inject: false,
             filename: 'index.html',
             template: path.join(__dirname, 'app', 'index.html'),
-            cipher: '',
-            title: 'OAuth Example',
-        }),
-        new webpack.ProvidePlugin({
-            $: 'jquery',
-            jQuery: 'jquery',
-            'global.$': 'jquery',
-        }),
-        new webpack.DefinePlugin({
-            'require.specified': 'require.resolve',
+            title: 'Onshape Oauth Example',
         }),
     ],
 };

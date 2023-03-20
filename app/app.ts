@@ -32,6 +32,9 @@ import {
     BTGlobalTreeNodesInfo,
     BTGlobalTreeNodesInfoFromJSON,
 } from 'onshape-typescript-fetch/models';
+import { createSVGIcon } from './onshape/svgicon';
+
+// import svginfo from './icons.v1.4.219.min.svg';
 
 export class App extends BaseApp {
     public myserver = 'https://ftconshape.com/oauthexample';
@@ -67,12 +70,45 @@ export class App extends BaseApp {
         return magic + ' - NOT FOUND';
     }
 
+    public addSVGSymbols(div: HTMLElement) {
+        //<object type="image/svg+xml" data="./onshape/icons.v1.4.219.min.svg"></object>
+        // const object = document.createElementNS(
+        //     'http://www.w3.org/2000/svg',
+        //     'object'
+        // );
+        // object.setAttribute('type', 'image/svg+xml');
+        // object.setAttribute('data', './onshape/icons.svg');
+        // div.appendChild(object);
+
+        // use.setAttribute(
+        //     'xlink:href',
+        //     './onshape/icons.svg#svg-icon-folder'
+        // );
+
+        // const svg = document.createElementNS(
+        //     'http://www.w3.org/2000/svg',
+        //     'img'
+        // );
+        // console.log(svginfo);
+        // svg.setAttribute('src', svginfo);
+        // //        svg.innerHTML = svginfo;
+        // div.appendChild(svg);
+        // const svg = document.createElementNS(
+        //     'http://www.w3.org/2000/svg',
+        //     'div'
+        // );
+        // svg.innerHTML = svginfo;
+        // div.appendChild(svg);
+        return;
+    }
     /**
      * The main entry point for an app
      */
     public startApp(): void {
         // Create a dropdown that allows them to select which list to display
         var div = document.createElement('div');
+
+        this.addSVGSymbols(div);
         div.appendChild(
             JTmakeSelectList(
                 'magic',
@@ -175,7 +211,17 @@ export class App extends BaseApp {
             this.loaded++;
             // Create a LI element to hold the entry
             let li = document.createElement('li');
-            li.innerHTML = item.name + ' - ' + item.createdBy.name;
+            if (item.isContainer) {
+                const svg = createSVGIcon(
+                    'svg-icon-folder',
+                    'folder-list-icon'
+                );
+                li.appendChild(svg);
+
+                li.ondblclick = () => {
+                    console.log('Double Clicked on Element: ' + item.name);
+                };
+            }
             ul.appendChild(li);
             if (
                 item.thumbnail !== undefined &&
@@ -190,8 +236,19 @@ export class App extends BaseApp {
                     img.setAttribute('src', src);
                 });
                 img.setAttribute('height', '40');
+                img.classList.add('os-thumbnail-image');
+
+                img.setAttribute('draggable', 'false');
+                img.setAttribute('alt', 'Thumbnail image for a document.');
+                img.ondragstart = (ev) => {
+                    return false;
+                };
                 li.appendChild(img);
             }
+            let txt = document.createTextNode(
+                item.name + ' - ' + item.createdBy.name
+            );
+            li.appendChild(txt);
         }
     }
     /**
@@ -201,7 +258,7 @@ export class App extends BaseApp {
     public processNode(magic: string) {
         // uri: string) {
         // Get Onshape to return the list
-        this.globaltreenodesapi
+        this.globaltreenodesApi
             .globalTreeNodesMagic({ mid: magic })
             .then((res) => {
                 this.ProcessNodeResults(res);
