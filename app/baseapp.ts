@@ -334,7 +334,7 @@ export class BaseApp {
             elementId: this.elementId,
             messageName: 'applicationInit',
         };
-        console.log('Posting message: %o', message);
+        // console.log('Posting message: %o', message);
         window.parent.postMessage(message, '*');
     }
     /**
@@ -350,7 +350,7 @@ export class BaseApp {
             },
             false
         );
-        console.log('Event Listener added to %o', window);
+        //console.log('Event Listener added to %o', window);
     }
     /**
      * Listen for clicks in our application and post a message to the Onshape client
@@ -361,14 +361,14 @@ export class BaseApp {
             topelement.addEventListener(
                 'click',
                 () => {
-                    console.log('clicked!');
+                    // console.log('clicked!');
                     let message = {
                         documentId: this.documentId,
                         workspaceId: this.workspaceId,
                         elementId: this.elementId,
                         messageName: 'closeFlyoutsAndMenus',
                     };
-                    console.log('Posting message: %o', message);
+                    // console.log('Posting message: %o', message);
                     window.parent.postMessage(message, '*');
                 },
                 true
