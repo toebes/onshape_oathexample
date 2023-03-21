@@ -33,6 +33,7 @@ import {
     BTGlobalTreeNodesInfoFromJSON,
 } from 'onshape-typescript-fetch/models';
 import { createSVGIcon } from './onshape/svgicon';
+import { JTRow, JTTable } from './common/jttable';
 
 // import svginfo from './icons.v1.4.219.min.svg';
 
@@ -145,9 +146,11 @@ export class App extends BaseApp {
         h2.innerHTML = 'Dumping ' + magictitle;
         dumpNodes.appendChild(h2);
         // And create a place holder for all the entries
-        const ul = document.createElement('ul');
-        ul.setAttribute('id', 'glist');
-        dumpNodes.appendChild(ul);
+        const table = new JTTable({
+            class: 'os-documents-list os-items-table full-width',
+        }).generate();
+        table.setAttribute('id', 'glist');
+        dumpNodes.appendChild(table);
         // Start the process off with the first in the magic list
         this.processNode(magic);
     }
@@ -158,15 +161,19 @@ export class App extends BaseApp {
      */
     public appendElements(items: BTGlobalTreeMagicNodeInfo[]): void {
         // Figure out where we are to add the entries
-        let ul = document.getElementById('glist');
-        if (ul === null) {
-            ul = document.createElement('ul');
+        let table = document.getElementById('glist');
+        if (table === null) {
+            const table = new JTTable({
+                class: 'os-documents-list os-items-table full-width',
+            }).generate();
+            table.setAttribute('id', 'glist');
+
             let appelement = document.getElementById('app');
             // If for some reason we lost the place it is supposed to go, just append to the body
             if (appelement === null) {
                 appelement = document.body;
             }
-            appelement.append(ul);
+            appelement.append(table);
         }
         //
         // Iterate over all the items
@@ -177,21 +184,27 @@ export class App extends BaseApp {
             }
             // Count another entry output
             this.loaded++;
+            ///
+            // <table class="os-documents-list os-items-table full-width"><tbody>
+            // <tr class="os-item-row os-document-in-list">
+            // <td class="os-documents-thumbnail-column os-document-folder-thumbnail-column document-item"><svg class="os-svg-icon folder-list-icon"><use href="#svg-icon-folder"></use></svg></td>
+            // <td class="os-document-name document-item">Visor - John Toebes</td></tr></tbody></table>
+            ////
             // Create a LI element to hold the entry
-            let li = document.createElement('li');
+            let row = new JTRow({ class: 'os-item-row os-document-in-list' });
             if (item.isContainer) {
                 const svg = createSVGIcon(
                     'svg-icon-folder',
                     'folder-list-icon'
                 );
-                li.appendChild(svg);
-
-                li.ondblclick = () => {
-                    console.log('Double Clicked on Element: ' + item.name);
-                };
-            }
-            ul.appendChild(li);
-            if (
+                row.add({
+                    celltype: 'td',
+                    settings: {
+                        class: 'os-documents-thumbnail-column os-document-folder-thumbnail-column document-item',
+                    },
+                    content: svg,
+                });
+            } else if (
                 item.thumbnail !== undefined &&
                 item.thumbnail.href !== undefined
             ) {
@@ -211,12 +224,48 @@ export class App extends BaseApp {
                 img.ondragstart = (ev) => {
                     return false;
                 };
-                li.appendChild(img);
+                row.add({
+                    celltype: 'td',
+                    settings: {
+                        class: 'os-documents-thumbnail-column document-item',
+                    },
+                    content: img,
+                });
+            } else {
+                row.add('');
             }
-            let txt = document.createTextNode(
-                item.name + ' - ' + item.createdBy.name
-            );
-            li.appendChild(txt);
+            // Document Name
+            row.add({
+                celltype: 'td',
+                settings: { class: 'os-document-name document-item' },
+                content: item.name,
+            });
+            // Modified
+            row.add({
+                celltype: 'td',
+                settings: { class: 'os-item-modified-date document-item' },
+                content: item.modifiedAt.toLocaleTimeString(),
+            });
+            // Modified By
+            row.add({
+                celltype: 'td',
+                settings: {
+                    class: 'os-item-modified-by os-with-owned-by document-item',
+                },
+                content: item.owner.name,
+            });
+            // Owned By
+            row.add({
+                celltype: 'td',
+                settings: { class: 'os-item-owned-by document-item' },
+                content: item.owner.name,
+            });
+            const rowelem = row.generate();
+            rowelem.ondblclick = () => {
+                console.log('Double Clicked on Element: ' + item.name);
+            };
+
+            table.appendChild(rowelem);
         }
     }
     /**
