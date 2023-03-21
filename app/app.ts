@@ -234,11 +234,19 @@ export class App extends BaseApp {
             } else {
                 row.add('');
             }
+            const alink = document.createElement('a');
+            alink.textContent = item.name;
+            alink.classList.add('os-document-display-name');
+            if (item.isContainer) {
+                alink.onclick = () => {
+                    this.processFolder(item);
+                };
+            }
             // Document Name
             row.add({
                 celltype: 'td',
                 settings: { class: 'os-document-name document-item' },
-                content: item.name,
+                content: alink,
             });
             // Modified
             row.add({
@@ -262,9 +270,8 @@ export class App extends BaseApp {
             });
             const rowelem = row.generate();
             rowelem.ondblclick = () => {
-                console.log('Double Clicked on Element: ' + item.name);
+                this.processFolder(item);
             };
-
             table.appendChild(rowelem);
         }
     }
@@ -309,6 +316,45 @@ export class App extends BaseApp {
             // All done
             this.setRunning(false);
         }
+    }
+    public processFolder(item: BTGlobalTreeMagicNodeInfo) {
+        // If we are in the process of running, we don't want to start things over again
+        // so just ignore the call here
+        if (this.running) {
+            return;
+        }
+        // Note that we are running and reset the count of entries we have gotten
+        this.setRunning(true);
+        this.loaded = 0;
+
+        // Clean up the UI so we can populate it with new entries
+        let dumpNodes = document.getElementById('dump');
+        if (dumpNodes !== null) {
+            dumpNodes.innerHTML = '';
+        } else {
+            dumpNodes = document.body;
+        }
+        // Output the title of what we are dumping
+        var h2 = document.createElement('h2');
+        h2.innerHTML = 'Folder: ' + item.name;
+        dumpNodes.appendChild(h2);
+        // And create a place holder for all the entries
+        const table = new JTTable({
+            class: 'os-documents-list os-items-table full-width',
+        }).generate();
+        table.setAttribute('id', 'glist');
+        dumpNodes.appendChild(table);
+
+        this.globaltreenodesApi
+            .globalTreeNodesFolder({ fid: item.id })
+            .then((res) => {
+                this.ProcessNodeResults(res);
+            })
+            .catch((err) => {
+                // Something went wrong, some mark us as no longer running.
+                console.log(`**** Call failed: ${err}`);
+                this.setRunning(false);
+            });
     }
 
     /**
