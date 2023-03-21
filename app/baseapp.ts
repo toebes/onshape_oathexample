@@ -31,7 +31,13 @@
 import { ExchangeToken, IExchangeToken } from './oauth';
 import * as runtime from 'onshape-typescript-fetch/runtime';
 import { URLApi } from './urlapi';
-import { GlobalTreeNodesApi, BTThumbnailInfo } from 'onshape-typescript-fetch';
+import {
+    GlobalTreeNodesApi,
+    BTThumbnailInfo,
+    MetadataApi,
+    ElementApi,
+    DocumentApi,
+} from 'onshape-typescript-fetch';
 
 /**
  * BaseApp contains all the support routines that your application will need.
@@ -58,6 +64,9 @@ export class BaseApp {
     public expires_token: Date;
 
     public globaltreenodesApi: GlobalTreeNodesApi;
+    public medadataApi: MetadataApi;
+    public elementApi: ElementApi;
+    public documentApi: DocumentApi;
     public urlAPI: URLApi;
     public configuration: runtime.Configuration;
 
@@ -235,7 +244,7 @@ export class BaseApp {
         method: runtime.HTTPMethod = 'GET',
         initOverrides?: RequestInit | runtime.InitOverrideFunction
     ): Promise<any> {
-        console.log(`***Onshape Request ${url}`);
+        // console.log(`***Onshape Request ${url}`);
         const headerParameters: runtime.HTTPHeaders = {};
 
         if (this.configuration && this.configuration.accessToken) {
@@ -316,6 +325,9 @@ export class BaseApp {
         // Initialize all the APIs that we need to support
         this.configuration = new runtime.Configuration(configparams);
         this.globaltreenodesApi = new GlobalTreeNodesApi(this.configuration);
+        this.medadataApi = new MetadataApi(this.configuration);
+        this.elementApi = new ElementApi(this.configuration);
+        this.documentApi = new DocumentApi(this.configuration);
 
         this.ListenForAppClicks();
         this.AddPostMessageListener();
@@ -436,7 +448,7 @@ export class BaseApp {
                     break;
                 case 'clientId':
                     this.clientId = val;
-                    console.log('Setting clientId=%s', this.clientId);
+                    // console.log('Setting clientId=%s', this.clientId);
                     break;
                 case 'locale':
                     break;

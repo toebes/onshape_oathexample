@@ -28,6 +28,9 @@
 import { BaseApp } from './baseapp';
 import { JTmakeSelectList, JTSelectItem } from './common/jtselect';
 import {
+    BTDocumentElementInfo,
+    BTDocumentInfo,
+    BTDocumentSummaryInfo,
     BTGlobalTreeMagicNodeInfo,
     BTGlobalTreeNodeInfo,
     BTGlobalTreeNodesInfo,
@@ -159,7 +162,6 @@ export class App extends BaseApp {
      */
     public setBreadcrumbs(breadcrumbs: BTGlobalTreeNodeInfo[]): void {
         // Find where they want us to put the breadcrumbs
-        console.log(breadcrumbs);
         const breadcrumbscontainer = document.getElementById('breadcrumbs');
         if (
             breadcrumbscontainer === undefined ||
@@ -284,8 +286,6 @@ export class App extends BaseApp {
         );
         for (let i = breadcrumbs.length - 1; i >= 0; i--) {
             const node = breadcrumbs[i];
-            console.log('Working on breadcrumb');
-            console.log(node);
 
             let breadcrumbdiv: HTMLElement;
             const isLast = i == 0;
@@ -540,7 +540,7 @@ export class App extends BaseApp {
                 };
             } else {
                 alink.ondblclick = () => {
-                    alert(`Time to insert ${item.name} from ${item.id}`);
+                    this.insertItem(item);
                 };
             }
             // Document Name
@@ -576,11 +576,127 @@ export class App extends BaseApp {
                 };
             } else {
                 rowelem.ondblclick = () => {
-                    alert(`Time to insert ${item.name} from ${item.id}`);
+                    if (item.jsonType !== 'document-summary') {
+                        console.log(
+                            `Wrong type in appendElements expected document-summary but got ${item.jsonType}`
+                        );
+                    }
+
+                    this.insertItem(item as BTDocumentSummaryInfo);
                 };
             }
             table.appendChild(rowelem);
         }
+    }
+    public getDocumentElementInfo(
+        documentId: string,
+        workspaceId: string,
+        elementId?: string
+    ): Promise<BTDocumentElementInfo> {
+        return new Promise((resolve, reject) => {
+            this.documentApi
+                .getElementsInDocument({
+                    did: documentId,
+                    wvm: 'w',
+                    wvmid: workspaceId,
+                    elementId: elementId,
+                })
+                .then((val: BTDocumentElementInfo[]) => {
+                    for (let elem of val) {
+                        if (elem.id === this.elementId) {
+                            resolve(elem);
+                            return;
+                        }
+                    }
+                    // We didn't find it, so return an empty structure
+                    const result: BTDocumentElementInfo = {};
+                    resolve(result);
+                })
+                .catch((reason) => {
+                    reject(reason);
+                });
+        });
+    }
+    public getDocumentInfo(documentId: string): Promise<BTDocumentInfo> {
+        //return new Promise((resolve, reject) => {
+        return this.documentApi.getDocument({ did: documentId });
+        // //                .then((val: BTDocumentInfo) => {
+        //                     resolve(val);
+        //                 })
+        //                 .catch((reason) => {
+        //                     reject(reason);
+        //                 });
+        //         });
+    }
+    /**
+     * Insert an item into the main document
+     * @param item Item to insert into the main document
+     */
+    public insertItem(item: BTDocumentSummaryInfo): void {
+        this.getDocumentElementInfo(
+            this.documentId,
+            this.workspaceId,
+            this.elementId
+        ).then((val: BTDocumentElementInfo) => {
+            if (val.elementType === 'PARTSTUDIO') {
+                this.insertToPartStudio(
+                    this.documentId,
+                    this.workspaceId,
+                    this.elementId,
+                    item
+                );
+            } else if (val.elementType === 'ASSEMBLY') {
+                this.insertToAssembly(
+                    this.documentId,
+                    this.workspaceId,
+                    this.elementId,
+                    item
+                );
+            } else {
+                alert(`Unable to insert into ${val.elementType}`);
+            }
+        });
+    }
+    /**
+     * Insert an item into a Parts Studio
+     * @param documentId Document to insert into
+     * @param workspaceId Workspace in the document
+     * @param elementId Element of parts studio to insert into
+     * @param item Document to insert from
+     */
+    public insertToPartStudio(
+        documentId: string,
+        workspaceId: string,
+        elementId: string,
+        item: BTDocumentSummaryInfo
+    ) {
+        alert(
+            `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO a parts studio`
+        );
+        // Figure out the best parts
+        this.getDocumentInfo(item.id).then((res) => {
+            console.log(res);
+        });
+    }
+    /**
+     * Insert an item into an Assembly
+     * @param documentId Document to insert into
+     * @param workspaceId Workspace in the document
+     * @param elementId Element of parts studio to insert into
+     * @param item Document to insert from
+     */
+    public insertToAssembly(
+        documentId: string,
+        workspaceId: string,
+        elementId: string,
+        item: BTDocumentSummaryInfo
+    ) {
+        alert(
+            `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO an assembly`
+        );
+        this.getDocumentInfo(documentId).then((res) => {
+            console.log(res);
+        });
     }
     /**
      * Process a single node entry
