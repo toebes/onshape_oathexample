@@ -7,6 +7,6 @@
   $logfilename = "oauth.log";
   $enable_log = false;
   $client_url = "https://oauth.onshape.com/oauth/token";
-  $client_id = '<PUT YOUR CLIENT ID HERE>';
-  $client_secret = '<PUT YOUR CLIENT SECRET HERE>';
+  $client_id = 'ZRWJRUVAE4ZKSUWB3IZG4A75HAXRCK65FXCY7RQ=';
+  $client_secret = '7PEDHU6ML3QOQKTF7ABOS7WDI6RMSYHXYJA5CTEHBGBZCOQJTYCQ====';
 ?>
