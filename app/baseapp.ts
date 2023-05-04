@@ -37,6 +37,9 @@ import {
     MetadataApi,
     ElementApi,
     DocumentApi,
+    PartApi,
+    PartStudioApi,
+    AssemblyApi,
 } from 'onshape-typescript-fetch';
 
 /**
@@ -67,6 +70,9 @@ export class BaseApp {
     public medadataApi: MetadataApi;
     public elementApi: ElementApi;
     public documentApi: DocumentApi;
+    public assemblyApi: AssemblyApi;
+    public partstudioApi: PartStudioApi;
+    public partApi: PartApi;
     public urlAPI: URLApi;
     public configuration: runtime.Configuration;
 
@@ -215,6 +221,7 @@ export class BaseApp {
     public getAccessToken(): Promise<string> {
         return new Promise<string>((resolve, reject) => {
             // TODO: Check lifetime of bearer token and if needed request a new one
+            // <InvalidTokenException><error>invalid_token</error><error_description>Invalid access token</error_description></InvalidTokenException>
             resolve('Bearer ' + this.access_token);
         });
     }
@@ -328,6 +335,9 @@ export class BaseApp {
         this.medadataApi = new MetadataApi(this.configuration);
         this.elementApi = new ElementApi(this.configuration);
         this.documentApi = new DocumentApi(this.configuration);
+        this.assemblyApi = new AssemblyApi(this.configuration);
+        this.partstudioApi = new PartStudioApi(this.configuration);
+        this.partApi = new PartApi(this.configuration);
 
         this.ListenForAppClicks();
         this.AddPostMessageListener();

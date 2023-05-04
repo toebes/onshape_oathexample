@@ -26,9 +26,11 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 import { BaseApp } from './baseapp';
-import { JTmakeSelectList, JTSelectItem } from './common/jtselect';
 import {
+    BTAssemblyInstanceDefinitionParams,
+    BTConfigurationResponse2019,
     BTDocumentElementInfo,
+    BTDocumentElementInfoElementTypeEnum,
     BTDocumentInfo,
     BTDocumentSummaryInfo,
     BTGlobalTreeMagicNodeInfo,
@@ -43,6 +45,11 @@ export interface magicIconInfo {
     label: string;
     icon: OnshapeSVGIcon;
     hideFromMenu?: boolean;
+}
+
+export interface InsertElementInfo {
+    element: BTDocumentElementInfo;
+    config: BTConfigurationResponse2019;
 }
 
 export class App extends BaseApp {
@@ -322,7 +329,7 @@ export class App extends BaseApp {
                     node.name,
                     isLast,
                     () => {
-                        this.processFolder(node.id, node.name);
+                        this.processFolder(node.id, node.name, node.treeHref);
                     }
                 );
             }
@@ -536,7 +543,7 @@ export class App extends BaseApp {
             alink.classList.add('os-document-display-name');
             if (item.isContainer) {
                 alink.onclick = () => {
-                    this.processFolder(item.id, item.name);
+                    this.processFolder(item.id, item.name, item.treeHref);
                 };
             } else {
                 alink.ondblclick = () => {
@@ -572,7 +579,7 @@ export class App extends BaseApp {
             const rowelem = row.generate();
             if (item.isContainer) {
                 rowelem.ondblclick = () => {
-                    this.processFolder(item.id, item.name);
+                    this.processFolder(item.id, item.name, item.treeHref);
                 };
             } else {
                 rowelem.ondblclick = () => {
@@ -670,12 +677,112 @@ export class App extends BaseApp {
         elementId: string,
         item: BTDocumentSummaryInfo
     ) {
-        alert(
-            `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO a parts studio`
-        );
-        // Figure out the best parts
-        this.getDocumentInfo(item.id).then((res) => {
-            console.log(res);
+        // Let's dump out what is actually in the part studio
+
+        this.partstudioApi
+            .getPartStudioFeatures({
+                did: documentId,
+                wvm: 'w',
+                wvmid: workspaceId,
+                eid: elementId,
+            })
+            .then((res) => {
+                console.log('Part Stuio Features:');
+                console.log(res);
+            });
+
+        // alert(
+        //     `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO a parts studio`
+        // );
+        // // Figure out the best parts
+        // this.documentApi.getDocument({ did: item.id }).then((res) => {
+        //     console.log(res);
+        // });
+    }
+    /**
+     *
+     * 1. Examine the document an determine if we can insert without prompting the user
+     *    a. There is a parts studio tab with the same name as the main document with a single object on that tab
+     *       (or one object named the same as the main document) and no configuration options for that object.
+     *       If so, insert it
+     *    b. If there is an assembly tab with the same name as the main document with no configuration options
+     *       and we are inserting into an assembly, insert the entire assembly.
+     *    c. If there is a single tab (only looking at Parts studios and Assemblies) parts studio
+     *       with a single part with no configuration options, insert it
+     *    d. If there is a single assembly (looking at parts studios/assemblies) with no configuration options
+     *       and we are inserting into an assembly then insert the entire assembly
+     *    e. If there are no (parts studios/assembly) tabs, give them a message about nothing to insert
+     * 2. We know that we have to present them a choice of what to insert.
+     *    Go through all the (part studios/assemblies) tabs
+     *    [eliminate assemblies if we are inserting into a parts studio]
+     *    to gather all that have at least one item in them
+     *    a. Tabs that are assemblies count as a single item.
+     *    b. For parts we only want actual parts/combined parts, not drawings, curves, surfaces
+     *    c. For every part that is on a tab with a configuration, remember the configuration options
+     *    d. For every assembly with a configuration, remember the configuration options
+     *    e. Create an overlay dialog (leaving the underlying list of parts still loaded) that offers the options to choose to insert.
+     *       If an item has configuration options, put them next to the part.
+     *       The overlay dialog has a close button and doesn't auto close after inserting the part from the dialog.
+     */
+    /**
+     * Find all potential items to insert.
+     * @param item Document that we are trying to insert from
+     * @param insertType The type of document that we are inserting into
+     * @returns Array of InsertElementInfo entries so that the inserting code can make a descision
+     */
+    public async getInsertChoices(
+        item: BTDocumentSummaryInfo,
+        insertType: BTDocumentElementInfoElementTypeEnum
+    ): Promise<InsertElementInfo[]> {
+        return new Promise(async (resolve, reject) => {
+            // If item.defaultWorkspace is empty or item.defaultWorkspace.id is null then we need to
+            // call https://cad.onshape.com/glassworks/explorer/#/Document/getDocumentWorkspaces to get a workspace
+            // for now we will assume it is always provided
+            const documentinfo = await this.documentApi.getElementsInDocument({
+                did: item.id,
+                wvm: 'w',
+                wvmid: item.defaultWorkspace.id,
+            });
+            if (documentinfo === undefined) {
+                resolve([]); // Nothing to insert
+            }
+            const result: InsertElementInfo[] = [];
+            for (let element of documentinfo) {
+                if (
+                    element.elementType === 'PARTSTUDIO' ||
+                    (element.elementType === 'ASSEMBLY' &&
+                        insertType === element.elementType)
+                ) {
+                    // We to determine if this element has configurations to pick fom
+                    const config = await this.elementApi.getConfiguration({
+                        did: item.id,
+                        wvm: 'w',
+                        wvmid: item.defaultWorkspace.id,
+                        eid: element.id,
+                    });
+                    if (config !== undefined) {
+                        // If it is a part studio, we need to see how many parts there are in it
+                        const xxx =
+                            await this.partstudioApi.getPartStudioFeatures({
+                                did: item.id,
+                                wvm: 'w',
+                                wvmid: item.defaultWorkspace.id,
+                                eid: element.id,
+                            });
+                        xxx.features.length;
+                        xxx.features[0].featureId;
+                        result.push({ element: element, config: config });
+                        // See if this is an only matching situation
+                        if (element.name === item.name && result.length === 1) {
+                            // We found an element that matches the name of the containing document.
+                            // If it is the first one and we found nothing else, then return
+                            // it for them to insert.
+                            // TODO: Add an option to override this behavior
+                            resolve(result);
+                        }
+                    }
+                }
+            }
         });
     }
     /**
@@ -691,12 +798,125 @@ export class App extends BaseApp {
         elementId: string,
         item: BTDocumentSummaryInfo
     ) {
-        alert(
-            `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO an assembly`
-        );
-        this.getDocumentInfo(documentId).then((res) => {
+        this.assemblyApi
+            .getAssemblyDefinition({
+                did: documentId,
+                wvm: 'w',
+                wvmid: workspaceId,
+                eid: elementId,
+            })
+            .then((res) => {
+                console.log('Assembly Information');
+                console.log(res);
+            });
+
+        const assemblyparms: BTAssemblyInstanceDefinitionParams = {
+            _configuration: 'default',
+            documentId: '5096c5677f11dbb880c20ece',
+            microversionId: '80c6f67ca4fcda7fbfdf9a2d',
+            versionId: '98c10de5931cbb46c230ed83',
+            elementId: '5b846f306c4c44a22a93d47a',
+            isAssembly: true,
+            includePartTypes: ['PARTS', 'COMPOSITE_PARTS'],
+            isHidden: false,
+            isSuppressed: false,
+            isWholePartStudio: true,
+        };
+
+        this.assemblyApi
+            .createInstance({
+                did: documentId,
+                wid: workspaceId,
+                eid: elementId,
+                bTAssemblyInstanceDefinitionParams: assemblyparms,
+            })
+            .then((res) => {
+                console.log('Created Instance');
+                console.log(res);
+            });
+
+        // assembly_data = {
+        //     "name": "My Assembly",
+        //     "description": "An example assembly created using the Onshape API",
+        //     "rootAssembly": True,
+        //     "subAssemblies": [
+        //         {
+        //             "documentId": "SUB_ASSEMBLY_DOCUMENT_ID",
+        //             "elementId": "SUB_ASSEMBLY_ELEMENT_ID",
+        //             "transform": [
+        //                 [1, 0, 0, 0],
+        //                 [0, 1, 0, 0],
+        //                 [0, 0, 1, 0],
+        //                 [0, 0, 0, 1]
+        //             ]
+        //         }
+        //     ]
+        // }
+        return;
+        // When inserting there are several possible situations
+        // 1. There is No default workspace/tab defined.
+        // 2. The default workspace/tab has than one part in the part studio/Assembly
+        // 3. The Part Studio/Assembly has configurations
+        // 4. It is just a Normal part.
+        // alert(
+        //     `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO an assembly`
+        // );
+        this.documentApi.getDocument({ did: item.id }).then((res) => {
+            console.log('Get Document');
             console.log(res);
         });
+
+        if (
+            item.defaultWorkspace === undefined ||
+            item.defaultWorkspace.id === undefined ||
+            item.defaultWorkspace.id === null ||
+            item.defaultElementId === undefined ||
+            item.defaultElementId === null
+        ) {
+            alert('No default workspace/element ID, unable to insert');
+            return;
+        }
+
+        // We have a default workspace/element ID, let's figure out what type it is
+        // If there is no default workspace or elements then we need to figure out what workspaces there are.
+        this.documentApi
+            .getElementsInDocument({
+                did: item.id,
+                wvm: 'w',
+                wvmid: item.defaultWorkspace.id,
+                elementId: item.defaultElementId,
+            })
+            .then((res) => {
+                console.log('Get Elements in Document');
+                console.log(res);
+            });
+        this.partApi
+            .getPartsWMVE({
+                did: item.id,
+                wvm: 'w',
+                wvmid: item.defaultWorkspace.id,
+                eid: item.defaultElementId,
+            })
+            .then((res) => {
+                console.log('Get Parts');
+                console.log(res);
+            });
+        this.elementApi
+            .getConfiguration({
+                did: item.id,
+                wvm: 'w',
+                wvmid: item.defaultWorkspace.id,
+                eid: item.defaultElementId,
+            })
+            .then((res) => {
+                console.log('Get Configuration');
+                console.log(res);
+                if (res.configurationParameters.length > 0) {
+                    alert('Must select configuration');
+                } else {
+                    alert('Simple item to insert');
+                }
+            });
     }
     /**
      * Process a single node entry
@@ -741,7 +961,13 @@ export class App extends BaseApp {
             this.setRunning(false);
         }
     }
-    public processFolder(id: string, name: string) {
+    /**
+     * Navigate into a folder and populate the UI with the contents
+     * @param id Id of folder
+     * @param _name Name of folder (not currently used, may be deleted)
+     * @param treeHref Optional href to access folder contents
+     */
+    public processFolder(id: string, _name: string, treeHref: string): void {
         // If we are in the process of running, we don't want to start things over again
         // so just ignore the call here
         if (this.running) {
@@ -765,16 +991,32 @@ export class App extends BaseApp {
         table.setAttribute('id', 'glist');
         dumpNodes.appendChild(table);
 
-        this.globaltreenodesApi
-            .globalTreeNodesFolder({ fid: id, getPathToRoot: true })
-            .then((res) => {
-                this.setBreadcrumbs(res.pathToRoot);
-                this.ProcessNodeResults(res);
-            })
-            .catch((err) => {
-                // Something went wrong, some mark us as no longer running.
-                console.log(`**** Call failed: ${err}`);
-                this.setRunning(false);
-            });
+        if (treeHref !== undefined && treeHref !== '') {
+            this.OnshapeRequest(
+                treeHref + '?getPathToRoot=true',
+                BTGlobalTreeNodesInfoFromJSON
+            )
+                .then((res) => {
+                    this.setBreadcrumbs(res.pathToRoot);
+                    this.ProcessNodeResults(res);
+                })
+                .catch((err) => {
+                    // Something went wrong, some mark us as no longer running.
+                    console.log(`**** Call failed: ${err}`);
+                    this.setRunning(false);
+                });
+        } else {
+            this.globaltreenodesApi
+                .globalTreeNodesFolder({ fid: id, getPathToRoot: true })
+                .then((res) => {
+                    this.setBreadcrumbs(res.pathToRoot);
+                    this.ProcessNodeResults(res);
+                })
+                .catch((err) => {
+                    // Something went wrong, some mark us as no longer running.
+                    console.log(`**** Call failed: ${err}`);
+                    this.setRunning(false);
+                });
+        }
     }
 }
