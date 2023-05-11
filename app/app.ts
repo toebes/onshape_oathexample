@@ -27,19 +27,29 @@
  */
 import { BaseApp } from './baseapp';
 import {
-    BTAssemblyInstanceDefinitionParams,
-    BTConfigurationResponse2019,
     BTDocumentElementInfo,
-    BTDocumentElementInfoElementTypeEnum,
-    BTDocumentInfo,
     BTDocumentSummaryInfo,
     BTGlobalTreeMagicNodeInfo,
     BTGlobalTreeNodeInfo,
     BTGlobalTreeNodesInfo,
     BTGlobalTreeNodesInfoFromJSON,
-} from 'onshape-typescript-fetch/models';
+    BTInsertableInfo,
+    BTInsertablesListResponse,
+    BTInsertablesListResponseFromJSON,
+    BTMConfigurationParameterBoolean2550,
+    BTMConfigurationParameterEnum105,
+    BTMConfigurationParameterQuantity1826,
+    BTMConfigurationParameterString872,
+    GBTElementType,
+    GetInsertablesRequest,
+} from 'onshape-typescript-fetch';
 import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
-import { classListAdd, JTRow, JTTable } from './common/jttable';
+import {
+    classListAdd,
+    createDocumentElement,
+    JTRow,
+    JTTable,
+} from './common/jttable';
 
 export interface magicIconInfo {
     label: string;
@@ -47,10 +57,28 @@ export interface magicIconInfo {
     hideFromMenu?: boolean;
 }
 
-export interface InsertElementInfo {
-    element: BTDocumentElementInfo;
-    config: BTConfigurationResponse2019;
+// Things to do in order to be basically complete:
+// * Implement scrolling (preferrably virtual) for items that don't fit on the screen
+// * Implement dialog for selcting a configurable item
+// * Implement dialog for selection more than one element for an item
+// * Distinguish between configured item vs configurable item
+// * Implement hover-over to show additional information
+// * Teams doesn't put the teams icon in the breadcrumbs (is it possible?)
+// * After changing a configuration, if the image doesn't get updated (not available), set a timer and retry it
+
+enum configType {
+    configBool,
+    configEnum,
+    configQuantity,
+    configString,
 }
+// These mappings are used to convert from the odd names in the API to something more meaningful
+const configMapping: { [name: string]: configType } = {
+    'BTMConfigurationParameterBoolean-2550': configType.configBool,
+    'BTMConfigurationParameterEnum-105': configType.configEnum,
+    'BTMConfigurationParameterQuantity-1826': configType.configQuantity,
+    'BTMConfigurationParameterString-872': configType.configString,
+};
 
 export class App extends BaseApp {
     public myserver = 'https://ftconshape.com/oauthexample';
@@ -58,6 +86,14 @@ export class App extends BaseApp {
     public magic = 1;
     public loaded = 0;
     public loadedlimit = 100; // Maximum number of items we will load
+    public targetDocumentElementInfo: BTDocumentElementInfo = {};
+
+    public insertToTarget: (
+        documentId: string,
+        workspaceId: string,
+        elementId: string,
+        item: BTInsertableInfo
+    ) => void = this.insertToOther;
 
     // public magicOptions: JTSelectItem[] = [
     //     { value: '0',  label: '0 - Recently Opened'
@@ -128,27 +164,49 @@ export class App extends BaseApp {
      */
     public startApp(): void {
         // Create the main container
-        var div = document.createElement('div');
+        var div = createDocumentElement('div');
 
         // Create the main div that shows where we are
-        var bcdiv = document.createElement('div');
-        classListAdd(
-            bcdiv,
-            'os-documents-heading-area disable-user-select os-row os-wrap os-align-baseline'
-        );
-        bcdiv.setAttribute('id', 'breadcrumbs');
+        var bcdiv = createDocumentElement('div', {
+            id: 'breadcrumbs',
+            class: 'os-documents-heading-area disable-user-select os-row os-wrap os-align-baseline',
+        });
         div.appendChild(bcdiv);
 
         // Create a place holder for the nodes to be dumped into
-        const dumpNodes = document.createElement('div');
-        dumpNodes.setAttribute('id', 'dump');
+        const dumpNodes = createDocumentElement('div', {
+            id: 'dump',
+            class: 'y-overflow',
+        });
         div.appendChild(dumpNodes);
 
         this.setAppElements(div);
         this.setBreadcrumbs([]);
 
-        // Start out by dumping the list of my Onshape entries
-        this.showHome();
+        this.getDocumentElementInfo(
+            this.documentId,
+            this.workspaceId,
+            this.elementId
+        )
+            .then((val: BTDocumentElementInfo) => {
+                this.targetDocumentElementInfo = val;
+
+                if (val.elementType === 'PARTSTUDIO') {
+                    this.insertToTarget = this.insertToPartStudio;
+                } else if (val.elementType === 'ASSEMBLY') {
+                    this.insertToTarget = this.insertToAssembly;
+                } else {
+                    this.failApp(
+                        `Only able to insert into PartStudios and Assemblies.  This page is of type ${val.elementType}`
+                    );
+                    return;
+                }
+                // Start out by dumping the list of my Onshape entries
+                this.showHome();
+            })
+            .catch((err) => {
+                this.failApp(err);
+            });
     }
     /**
      * Handle when an app is unable to authenticate or has any other problem when starting
@@ -216,7 +274,7 @@ export class App extends BaseApp {
         //           <div class="node-seperator">
         //             <svg class="os-svg-icon" icon="forward-tab">
         //               <title></title>
-        //               <use ng-if="!fromUri" href="#svg-icon-forward-tab" link="#svg-icon-forward-tab"></use><!---->
+        //               <use ng-if="!fromUri" href="#svg-icon-forward-tab" link="#svg-icon-forward-tab"></use>
         //             </svg>
         //           </div>
         //         </div>
@@ -224,7 +282,7 @@ export class App extends BaseApp {
         //           <div class="os-breadcrumb-node os-breadcrumb-leaf" ng-if="$ctrl.breadcrumbNode" ng-class="{'os-breadcrumb-leaf': $ctrl.last}">
         //             <svg class="breadcrumb-node-icon os-svg-icon" ng-if="$ctrl.breadcrumbNode.options.icon" icon="folder" ng-class="{'node-icon': !$ctrl.last, 'breadcrumb-node-text-hidden': !$ctrl.shouldShowTitle() &amp;&amp; !$ctrl.last }" ng-click="$ctrl.breadcrumbNode.callback($ctrl.breadcrumbNode.options)" data-original-title="ServoCity" data-placement="bottom">
         //               <title></title>
-        //               <use ng-if="!fromUri" href="#svg-icon-folder" link="#svg-icon-folder"></use><!---->
+        //               <use ng-if="!fromUri" href="#svg-icon-folder" link="#svg-icon-folder"></use>
         //             </svg>
         //             <div class="node-title hide-node-title" ng-class="{'hide-node-title': $ctrl.breadcrumbNode.uiSref || !$ctrl.shouldShowTitle()}" data-original-title="ServoCity" data-placement="bottom">
         //               <a ng-click="$ctrl.breadcrumbNode.callback($ctrl.breadcrumbNode.options)">ServoCity</a>
@@ -235,7 +293,7 @@ export class App extends BaseApp {
         //             <div ng-hide="$ctrl.last" class="node-seperator ng-hide">
         //               <svg class="os-svg-icon" icon="forward-tab">
         //                 <title></title>
-        //                 <use ng-if="!fromUri" href="#svg-icon-forward-tab" link="#svg-icon-forward-tab"></use><!---->
+        //                 <use ng-if="!fromUri" href="#svg-icon-forward-tab" link="#svg-icon-forward-tab"></use>
         //               </svg>
         //             </div>
         //           </div>
@@ -279,8 +337,9 @@ export class App extends BaseApp {
         // </div>
 
         // Always create a home button to go to the top level list
-        const breadcrumbsdiv = document.createElement('div');
-        breadcrumbsdiv.classList.add('os-breadcrumb-container');
+        const breadcrumbsdiv = createDocumentElement('div', {
+            class: 'os-breadcrumb-container',
+        });
         breadcrumbsdiv.appendChild(
             this.createBreadcrumbNode(
                 'svg-icon-home-button',
@@ -351,8 +410,9 @@ export class App extends BaseApp {
         isLast: boolean,
         onclickFunction: (e: any) => any
     ): HTMLElement {
-        const div = document.createElement('div');
-        div.classList.add('os-breadcrumb-node');
+        const div = createDocumentElement('div', {
+            class: 'os-breadcrumb-node',
+        });
         if (isLast) {
             div.classList.add('os-breadcrumb-leaf');
         }
@@ -360,16 +420,18 @@ export class App extends BaseApp {
         nodeicon.onclick = onclickFunction;
         div.appendChild(nodeicon);
 
-        const titlediv = document.createElement('div');
-        titlediv.classList.add('node-title');
-        titlediv.setAttribute('data-original-title', title);
-        titlediv.setAttribute('data-placement', 'bottom');
+        const titlediv = createDocumentElement('div', {
+            class: 'node-title',
+            'data-original-title': title,
+            'data-placement': 'bottom',
+        });
         titlediv.textContent = title;
         titlediv.onclick = onclickFunction;
         div.appendChild(titlediv);
         if (!isLast) {
-            const seperatordiv = document.createElement('div');
-            seperatordiv.classList.add('node-seperator');
+            const seperatordiv = createDocumentElement('div', {
+                class: 'node-seperator',
+            });
             seperatordiv.appendChild(createSVGIcon('svg-icon-forward-tab'));
             div.appendChild(seperatordiv);
         }
@@ -394,7 +456,7 @@ export class App extends BaseApp {
             const magicinfo = this.magicInfo[magicid];
             if (!magicinfo.hideFromMenu) {
                 const row = table.addBodyRow();
-                const span = document.createElement('span');
+                const span = createDocumentElement('span');
                 const icon = createSVGIcon(
                     magicinfo.icon,
                     'documents-filter-icon'
@@ -403,7 +465,7 @@ export class App extends BaseApp {
                     this.dumpMagic(magicid);
                 };
                 span.appendChild(icon);
-                const textspan = document.createElement('span');
+                const textspan = createDocumentElement('span');
                 textspan.textContent = magicinfo.label;
                 textspan.onclick = () => {
                     this.dumpMagic(magicid);
@@ -413,6 +475,7 @@ export class App extends BaseApp {
             }
         }
         dumpNodes.appendChild(table.generate());
+        this.setBreadcrumbs([]);
     }
     /**
      * Mark the UI as running.  We disable the dropdown so that you can't request
@@ -452,7 +515,7 @@ export class App extends BaseApp {
         }
         // Create a place holder for all the entries
         const table = new JTTable({
-            class: 'os-documents-list os-items-table full-width',
+            class: 'os-documents-listx os-items-table full-width',
         }).generate();
         table.setAttribute('id', 'glist');
         dumpNodes.appendChild(table);
@@ -468,7 +531,7 @@ export class App extends BaseApp {
         let table = document.getElementById('glist');
         if (table === null) {
             const table = new JTTable({
-                class: 'os-documents-list os-items-table full-width',
+                class: 'os-documents-listx os-items-table full-width',
             }).generate();
             table.setAttribute('id', 'glist');
 
@@ -482,6 +545,7 @@ export class App extends BaseApp {
         //
         // Iterate over all the items
         for (let item of items) {
+            const itemInfo = item as BTDocumentSummaryInfo;
             // Have we hit the limit?  If so then just skip out
             if (this.loaded >= this.loadedlimit) {
                 return;
@@ -508,21 +572,14 @@ export class App extends BaseApp {
                     },
                     content: svg,
                 });
-            } else if (
-                item.thumbnail !== undefined &&
-                item.thumbnail.href !== undefined
-            ) {
+                // } else if (
+                //     item.thumbnail !== undefined &&
+                //     item.thumbnail.href !== undefined
+                // ){
+            } else if (item.jsonType === 'document-summary') {
                 // It has an image, so request the thumbnail to be loaded for it
-                let img = document.createElement('img');
-
-                //img.setAttribute('src', item.thumbnail.href);
-                // Ask onshape to give us a thumbnail image to fill in
-                this.getThumbnail(item.thumbnail, 40, 40).then((src) => {
-                    img.setAttribute('src', src);
-                });
-                img.setAttribute('height', '40');
+                let img = this.createThumbnailImage(itemInfo);
                 img.classList.add('os-thumbnail-image');
-
                 img.setAttribute('draggable', 'false');
                 img.setAttribute('alt', 'Thumbnail image for a document.');
                 img.ondragstart = (ev) => {
@@ -538,18 +595,10 @@ export class App extends BaseApp {
             } else {
                 row.add('');
             }
-            const alink = document.createElement('a');
+            const alink = createDocumentElement('a', {
+                class: 'os-document-display-name',
+            });
             alink.textContent = item.name;
-            alink.classList.add('os-document-display-name');
-            if (item.isContainer) {
-                alink.onclick = () => {
-                    this.processFolder(item.id, item.name, item.treeHref);
-                };
-            } else {
-                alink.ondblclick = () => {
-                    this.insertItem(item);
-                };
-            }
             // Document Name
             row.add({
                 celltype: 'td',
@@ -563,33 +612,45 @@ export class App extends BaseApp {
                 content: item.modifiedAt.toLocaleTimeString(),
             });
             // Modified By
+            let modifiedby = '';
+            if (
+                item.modifiedBy !== null &&
+                item.modifiedBy !== undefined &&
+                item.modifiedBy.name !== null &&
+                item.modifiedBy.name !== undefined
+            ) {
+                modifiedby = item.modifiedBy.name;
+            }
             row.add({
                 celltype: 'td',
                 settings: {
                     class: 'os-item-modified-by os-with-owned-by document-item',
                 },
-                content: item.owner.name,
+                content: modifiedby,
             });
             // Owned By
+            let ownedBy = '';
+            if (
+                item.owner !== null &&
+                item.owner !== undefined &&
+                item.owner.name !== null &&
+                item.owner.name !== undefined
+            ) {
+                ownedBy = item.owner.name;
+            }
             row.add({
                 celltype: 'td',
                 settings: { class: 'os-item-owned-by document-item' },
-                content: item.owner.name,
+                content: ownedBy,
             });
             const rowelem = row.generate();
             if (item.isContainer) {
-                rowelem.ondblclick = () => {
+                rowelem.onclick = () => {
                     this.processFolder(item.id, item.name, item.treeHref);
                 };
-            } else {
-                rowelem.ondblclick = () => {
-                    if (item.jsonType !== 'document-summary') {
-                        console.log(
-                            `Wrong type in appendElements expected document-summary but got ${item.jsonType}`
-                        );
-                    }
-
-                    this.insertItem(item as BTDocumentSummaryInfo);
+            } else if (item.jsonType === 'document-summary') {
+                rowelem.onclick = () => {
+                    this.checkInsertItem(itemInfo);
                 };
             }
             table.appendChild(rowelem);
@@ -624,81 +685,6 @@ export class App extends BaseApp {
                 });
         });
     }
-    public getDocumentInfo(documentId: string): Promise<BTDocumentInfo> {
-        //return new Promise((resolve, reject) => {
-        return this.documentApi.getDocument({ did: documentId });
-        // //                .then((val: BTDocumentInfo) => {
-        //                     resolve(val);
-        //                 })
-        //                 .catch((reason) => {
-        //                     reject(reason);
-        //                 });
-        //         });
-    }
-    /**
-     * Insert an item into the main document
-     * @param item Item to insert into the main document
-     */
-    public insertItem(item: BTDocumentSummaryInfo): void {
-        this.getDocumentElementInfo(
-            this.documentId,
-            this.workspaceId,
-            this.elementId
-        ).then((val: BTDocumentElementInfo) => {
-            if (val.elementType === 'PARTSTUDIO') {
-                this.insertToPartStudio(
-                    this.documentId,
-                    this.workspaceId,
-                    this.elementId,
-                    item
-                );
-            } else if (val.elementType === 'ASSEMBLY') {
-                this.insertToAssembly(
-                    this.documentId,
-                    this.workspaceId,
-                    this.elementId,
-                    item
-                );
-            } else {
-                alert(`Unable to insert into ${val.elementType}`);
-            }
-        });
-    }
-    /**
-     * Insert an item into a Parts Studio
-     * @param documentId Document to insert into
-     * @param workspaceId Workspace in the document
-     * @param elementId Element of parts studio to insert into
-     * @param item Document to insert from
-     */
-    public insertToPartStudio(
-        documentId: string,
-        workspaceId: string,
-        elementId: string,
-        item: BTDocumentSummaryInfo
-    ) {
-        // Let's dump out what is actually in the part studio
-
-        this.partstudioApi
-            .getPartStudioFeatures({
-                did: documentId,
-                wvm: 'w',
-                wvmid: workspaceId,
-                eid: elementId,
-            })
-            .then((res) => {
-                console.log('Part Stuio Features:');
-                console.log(res);
-            });
-
-        // alert(
-        //     `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO a parts studio`
-        // );
-        // // Figure out the best parts
-        // this.documentApi.getDocument({ did: item.id }).then((res) => {
-        //     console.log(res);
-        // });
-    }
     /**
      *
      * 1. Examine the document an determine if we can insert without prompting the user
@@ -732,108 +718,507 @@ export class App extends BaseApp {
      */
     public async getInsertChoices(
         item: BTDocumentSummaryInfo,
-        insertType: BTDocumentElementInfoElementTypeEnum
-    ): Promise<InsertElementInfo[]> {
+        insertType: GBTElementType
+    ): Promise<BTInsertableInfo[]> {
         return new Promise(async (resolve, reject) => {
             // If item.defaultWorkspace is empty or item.defaultWorkspace.id is null then we need to
             // call https://cad.onshape.com/glassworks/explorer/#/Document/getDocumentWorkspaces to get a workspace
             // for now we will assume it is always provided
-            const documentinfo = await this.documentApi.getElementsInDocument({
+
+            // getInsertables
+            // /documents/d/{did}/{wv}/{wvid}/insertables"
+            const parameters: GetInsertablesRequest = {
                 did: item.id,
-                wvm: 'w',
-                wvmid: item.defaultWorkspace.id,
-            });
-            if (documentinfo === undefined) {
-                resolve([]); // Nothing to insert
-            }
-            const result: InsertElementInfo[] = [];
-            for (let element of documentinfo) {
-                if (
-                    element.elementType === 'PARTSTUDIO' ||
-                    (element.elementType === 'ASSEMBLY' &&
-                        insertType === element.elementType)
-                ) {
-                    // We to determine if this element has configurations to pick fom
-                    const config = await this.elementApi.getConfiguration({
-                        did: item.id,
-                        wvm: 'w',
-                        wvmid: item.defaultWorkspace.id,
-                        eid: element.id,
-                    });
-                    if (config !== undefined) {
-                        // If it is a part studio, we need to see how many parts there are in it
-                        const xxx =
-                            await this.partstudioApi.getPartStudioFeatures({
-                                did: item.id,
-                                wvm: 'w',
-                                wvmid: item.defaultWorkspace.id,
-                                eid: element.id,
-                            });
-                        xxx.features.length;
-                        xxx.features[0].featureId;
-                        result.push({ element: element, config: config });
-                        // See if this is an only matching situation
-                        if (element.name === item.name && result.length === 1) {
-                            // We found an element that matches the name of the containing document.
-                            // If it is the first one and we found nothing else, then return
-                            // it for them to insert.
-                            // TODO: Add an option to override this behavior
-                            resolve(result);
+                wv: 'v',
+                wvid: item.recentVersion.id,
+                includeParts: true,
+                includeSurfaces: false,
+                includeSketches: false,
+                includeReferenceFeatures: false,
+                includeAssemblies: true,
+                includeFeatureStudios: false,
+                includeBlobs: false,
+                includePartStudios: true,
+                includeFeatures: true,
+                includeMeshes: false,
+                includeWires: false,
+                includeFlattenedBodies: false,
+                includeApplications: false,
+                includeCompositeParts: true,
+                includeFSTables: false,
+                includeFSComputedPartPropertyFunctions: false,
+                includeVariables: false,
+                includeVariableStudios: false,
+            };
+
+            let insertables = await this.documentApi.getInsertables(parameters);
+            const result: BTInsertableInfo[] = [];
+            const insertMap = new Map<string, BTInsertableInfo>();
+            const dropParents = new Map<string, Boolean>();
+            while (insertables !== undefined && insertables.items.length > 0) {
+                for (let element of insertables.items) {
+                    if (
+                        element.elementType === 'PARTSTUDIO' ||
+                        (element.elementType === 'ASSEMBLY' &&
+                            insertType === element.elementType)
+                    ) {
+                        let elementName = element.elementName ?? '';
+
+                        if (
+                            elementName.toUpperCase().indexOf('DO NOT USE') < 0
+                        ) {
+                            // We want to save it
+                            insertMap[element.id] = element;
+                        }
+                        if (
+                            element.parentId !== undefined &&
+                            element.parentId !== null &&
+                            elementName
+                                .toUpperCase()
+                                .indexOf('DO NOT USE THESE PARTS') >= 0
+                        ) {
+                            dropParents[element.parentId] = true;
                         }
                     }
                 }
+                // If we are finished with the list return it
+                if (
+                    insertables.next === undefined ||
+                    insertables.next === null
+                ) {
+                    insertables = undefined;
+                } else {
+                    insertables = (await this.OnshapeRequest(
+                        insertables.next,
+                        BTInsertablesListResponseFromJSON
+                    )) as BTInsertablesListResponse;
+                }
             }
+            // We have built a map of all the options, now go through and prune any parents
+            for (const id in insertMap) {
+                const element = insertMap[id];
+                if (
+                    element.parentId !== undefined &&
+                    element.parentId !== null
+                ) {
+                    insertMap[element.parentId] = undefined;
+                }
+            }
+            for (const id in insertMap) {
+                const element = insertMap[id];
+                if (element !== undefined) {
+                    if (!dropParents[element.parentId]) {
+                        result.push(insertMap[id]);
+                    }
+                }
+            }
+
+            resolve(result);
         });
+    }
+    /**
+     * Check if an item can be inserted or if we have to prompt the user for more choices.
+     * @param item Item to check
+     */
+    public checkInsertItem(item: BTDocumentSummaryInfo): void {
+        this.getInsertChoices(
+            item,
+            this.targetDocumentElementInfo.elementType
+        ).then((res) => {
+            if (res.length === 1) {
+                if (
+                    res[0].configurationParameters !== undefined &&
+                    res[0].configurationParameters !== null
+                ) {
+                    this.showItemChoices(item, res);
+                } else {
+                    // Perform an actual insert of an item. Note that we already know if we are
+                    // going into a part studio or an assembly.
+                    this.insertToTarget(
+                        this.documentId,
+                        this.workspaceId,
+                        this.elementId,
+                        item
+                    );
+                }
+            } else {
+                console.log(`${res.length} choices found`);
+                this.showItemChoices(item, res);
+            }
+            console.log(res);
+        });
+    }
+    /**
+     * Show options for a configurable item to insert
+     * @param item
+     */
+
+    // [
+    //     {
+    //         "btType": "BTMConfigurationParameterEnum-105",
+    //         "nodeId": "M2GYU6sysKE5ini9U",
+    //         "parameterId": "List_rQUjcTCrGVekld",
+    //         "parameterName": "Length",
+    //         "defaultValue": "_3_00___2_Hole_",
+    //         "enumName": "List_rQUjcTCrGVekld_conf",
+    //         "namespace": "",
+    //         "options": [
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "M9iXW2dbu///1PsN0",
+    //                 "option": "Copy_of_3_00___3_Hole_",
+    //                 "optionName": "1.50\" (1 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MfCX7LRsS6IBYs9/s",
+    //                 "option": "_3_00___2_Hole_",
+    //                 "optionName": "3.00\" (3 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "M2jqt3Avv2Zi672ac",
+    //                 "option": "_3_75___4_Hole_",
+    //                 "optionName": "3.75\" (4 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MExImsNcUfTmTqVw6",
+    //                 "option": "_4_50___5_Hole_",
+    //                 "optionName": "4.50\" (5 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "Maul46dnuTCtHPzV2",
+    //                 "option": "_6_00___7_Hole_",
+    //                 "optionName": "6.00\" (7 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MEUQsuAKfJnCeLQ/w",
+    //                 "option": "_7_50___9_Hole_",
+    //                 "optionName": "7.50\" (9 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MwpNQYNWx0dWrxbXh",
+    //                 "option": "_9_00___11_Hole_",
+    //                 "optionName": "9.00\" (11 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MRqRRwsSL8wcQ9Hrv",
+    //                 "option": "_10_50___13_Hole_",
+    //                 "optionName": "10.50\" (13 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MRsnog6Qo4+/cTHGu",
+    //                 "option": "_12_00___15_Hole_",
+    //                 "optionName": "12.00\" (15 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MbpRO7DRhZBl/FRP6",
+    //                 "option": "_13_50___17_Hole_",
+    //                 "optionName": "13.50\" (17 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MoHDMXEXrW5413bYK",
+    //                 "option": "_15_00___19_Hole_",
+    //                 "optionName": "15.00\" (19 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MZLTSlWzsO9hC/1/J",
+    //                 "option": "_16_50___21_Hole_",
+    //                 "optionName": "16.50\" (21 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "M4ozgb4JDgfjJWn9M",
+    //                 "option": "_18_00___23_Hole_",
+    //                 "optionName": "18.00\" (23 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "M7lnJtknvb7cZWxtT",
+    //                 "option": "_21_0___27_Hole_",
+    //                 "optionName": "21.0\" (27 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "M+MTpleBisFuuS119",
+    //                 "option": "_24_0___31_Hole_",
+    //                 "optionName": "24.0\" (31 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MGl39WDIgAhejoogL",
+    //                 "option": "_36_0___47_Hole_",
+    //                 "optionName": "36.0\" (47 Hole)"
+    //             },
+    //             {
+    //                 "btType": "BTMEnumOption-592",
+    //                 "nodeId": "MAG7BOuWYX0IK0C1U",
+    //                 "option": "_48_0___63_Hole_",
+    //                 "optionName": "48.0\" (63 Hole)"
+    //             }
+    //         ]
+    //     }
+    // ]
+    public async showItemChoices(
+        parent: BTDocumentSummaryInfo,
+        items: BTInsertableInfo[]
+    ): Promise<void> {
+        // Clean up the UI so we can populate it with the list
+        let uiDiv = document.getElementById('dump');
+        if (uiDiv !== null) {
+            uiDiv.innerHTML = '';
+        } else {
+            uiDiv = document.body;
+        }
+        const itemTreeDiv = createDocumentElement('div', {
+            class: 'select-item-tree',
+        });
+        const itemParentGroup = createDocumentElement('div', {
+            class: 'select-item-parent-group',
+        });
+        itemTreeDiv.append(itemParentGroup);
+
+        const itemParentRow = createDocumentElement('div', {
+            class: 'select-item-dialog-item-row parent-item-expander-row os-selectable-item',
+        });
+        itemParentGroup.append(itemParentRow);
+
+        const levelControlButtons = createDocumentElement('div', {
+            class: 'ns-select-item-dialog-item-expand-collapse',
+        });
+        const imgExpand = createDocumentElement('img', {
+            src: 'https://cad.onshape.com/images/expanded.svg',
+        });
+        levelControlButtons.append(imgExpand);
+        itemParentRow.append(levelControlButtons);
+
+        // Get the parent information
+        const divParentItem = createDocumentElement('div', {
+            class: 'select-item-dialog-item parent-item',
+        });
+        const divParentThumbnailContainer = createDocumentElement('div', {
+            class: 'select-item-dialog-thumbnail-container os-no-shrink',
+        });
+        divParentItem.append(divParentThumbnailContainer);
+
+        const imgParentThumbnail = this.createThumbnailImage(parent);
+        itemParentRow.append(divParentItem);
+
+        divParentThumbnailContainer.append(imgParentThumbnail);
+
+        const divParentTitle = createDocumentElement('div', {
+            class: 'select-item-dialog-item-name',
+        });
+        divParentTitle.textContent = parent.name;
+
+        itemParentRow.append(divParentTitle);
+        uiDiv.appendChild(itemTreeDiv);
+
+        // Start the process off with the first in the magic list
+        for (const item of items) {
+            if (
+                item.configurationParameters !== undefined &&
+                item.configurationParameters !== null
+            ) {
+                await this.outputConfigurationOptions(item, itemParentGroup);
+            }
+            // Now we need to output the actual item.
+            const childContainerDiv = createDocumentElement('div', {
+                class: 'select-item-dialog-item-row child-item-container os-selectable-item',
+            });
+            const dialogItemDiv = createDocumentElement('div', {
+                class: 'select-item-dialog-item child-item',
+            });
+            const childThumbnailDiv = createDocumentElement('div', {
+                class: 'select-item-dialog-thumbnail-container os-no-shrink',
+            });
+            const imgChildThumbnail = this.createThumbnailImage(parent);
+            childThumbnailDiv.append(imgChildThumbnail);
+            const childNameDiv = createDocumentElement('div', {
+                class: 'select-item-dialog-item-name',
+            });
+            childNameDiv.textContent = item.elementName;
+            dialogItemDiv.append(childThumbnailDiv);
+            dialogItemDiv.append(childNameDiv);
+            childContainerDiv.append(dialogItemDiv);
+            itemParentGroup.append(childContainerDiv);
+        }
+    }
+
+    public async outputConfigurationOptions(
+        item: BTInsertableInfo,
+        itemParentGroup: HTMLElement
+    ) {
+        const itemConfig = await this.elementApi.getConfiguration({
+            did: item.documentId,
+            wvm: 'v',
+            wvmid: item.versionId,
+            eid: item.elementId,
+        });
+        console.log(
+            `Configuration ${itemConfig.configurationParameters.length} options`
+        );
+        for (let opt of itemConfig.configurationParameters) {
+            console.log(opt);
+            const divRow = createDocumentElement('div', {
+                class: 'select-item-dialog-item-row child-item-container os-selectable-item',
+            });
+            const divSelector = createDocumentElement('div', {
+                class: 'select-item-configuration-selector',
+            });
+            divRow.append(divSelector);
+            const spanOSWrapper = createDocumentElement('div', {
+                class: 'os-param-wrapper os-param-select',
+            });
+            divRow.append(spanOSWrapper);
+            const spanLabel = createDocumentElement('span', {
+                class: 'os-param-label',
+            });
+            spanLabel.textContent = opt.parameterName;
+            spanOSWrapper.append(spanLabel);
+
+            itemParentGroup.append(divRow);
+
+            switch (configMapping[opt.btType]) {
+                case configType.configBool: {
+                    const optBool = opt as BTMConfigurationParameterBoolean2550;
+                    console.log(
+                        `Boolean option ${optBool.parameterName} default=${optBool.defaultValue}`
+                    );
+                    break;
+                }
+                case configType.configEnum: {
+                    const optEnum = opt as BTMConfigurationParameterEnum105;
+
+                    const divContainer = createDocumentElement('div', {
+                        class: 'os-select-container os-select-bootstrap dropdown ng-not-empty ng-valid',
+                    });
+                    spanOSWrapper.append(divContainer);
+
+                    const spanSelector = createDocumentElement('span', {
+                        class: 'os-select-match-text float-start',
+                    });
+                    divContainer.append(spanSelector);
+
+                    const selector = createDocumentElement('select', {
+                        id: optEnum.parameterId,
+                        style: 'border:none; width:100%',
+                    });
+                    spanSelector.append(selector);
+                    spanSelector.onchange = (ev) => {
+                        console.log(ev);
+                        console.log(
+                            `Changed Configuration for ${optEnum.parameterId}`
+                        );
+                    };
+                    console.log(`Enum option ${optEnum.parameterName}`);
+                    for (let enumopt of optEnum.options) {
+                        const option = createDocumentElement('option', {
+                            value: enumopt.option,
+                        });
+                        option.textContent = enumopt.optionName;
+                        selector.append(option);
+                        console.log(
+                            `  ${enumopt.optionName} = ${enumopt.option}`
+                        );
+                    }
+                    break;
+                }
+                case configType.configString: {
+                    const optString = opt as BTMConfigurationParameterString872;
+                    console.log(
+                        `String option ${optString.parameterName} default=${optString.defaultValue}`
+                    );
+
+                    break;
+                }
+                case configType.configQuantity: {
+                    const optQuantity =
+                        opt as BTMConfigurationParameterQuantity1826;
+                    console.log(
+                        `Quantity option ${optQuantity.parameterName} - ${optQuantity.quantityType} [${optQuantity.rangeAndDefault.minValue}-${optQuantity.rangeAndDefault.minValue} ${optQuantity.rangeAndDefault.units}]`
+                    );
+                    break;
+                }
+                default: {
+                    console.log(`Unknown configuration btType ${opt.btType}`);
+                }
+            }
+        }
+    }
+
+    /**
+     *
+     * @param documentId Document to insert into
+     * @param workspaceId Workspace in the document
+     * @param elementId Element of parts studio to insert into
+     * @param item Document element to insert
+     */
+    public insertToOther(
+        documentId: string,
+        workspaceId: string,
+        elementId: string,
+        item: BTInsertableInfo
+    ): void {
+        alert(
+            `Unable to determine how to insert item ${item.id} - ${item.elementName} into ${this.targetDocumentElementInfo.elementType} ${documentId}/w/${workspaceId}/e/${elementId}`
+        );
+    }
+
+    /**
+     * Insert an item into a Parts Studio
+     * @param documentId Document to insert into
+     * @param workspaceId Workspace in the document
+     * @param elementId Element of parts studio to insert into
+     * @param item Document element to insert
+     */
+    public insertToPartStudio(
+        documentId: string,
+        workspaceId: string,
+        elementId: string,
+        item: BTInsertableInfo
+    ): void {
+        alert(
+            `Inserting item ${item.id} - ${item.elementName} into Part Studio ${documentId}/w/${workspaceId}/e/${elementId}`
+        );
     }
     /**
      * Insert an item into an Assembly
      * @param documentId Document to insert into
      * @param workspaceId Workspace in the document
      * @param elementId Element of parts studio to insert into
-     * @param item Document to insert from
+     * @param item Document element to insert
      */
     public insertToAssembly(
         documentId: string,
         workspaceId: string,
         elementId: string,
-        item: BTDocumentSummaryInfo
-    ) {
-        this.assemblyApi
-            .getAssemblyDefinition({
-                did: documentId,
-                wvm: 'w',
-                wvmid: workspaceId,
-                eid: elementId,
-            })
-            .then((res) => {
-                console.log('Assembly Information');
-                console.log(res);
-            });
+        item: BTInsertableInfo
+    ): void {
+        alert(
+            `Inserting item ${item.id} - ${item.elementName} into Assembly ${documentId}/w/${workspaceId}/e/${elementId}`
+        );
 
-        const assemblyparms: BTAssemblyInstanceDefinitionParams = {
-            _configuration: 'default',
-            documentId: '5096c5677f11dbb880c20ece',
-            microversionId: '80c6f67ca4fcda7fbfdf9a2d',
-            versionId: '98c10de5931cbb46c230ed83',
-            elementId: '5b846f306c4c44a22a93d47a',
-            isAssembly: true,
-            includePartTypes: ['PARTS', 'COMPOSITE_PARTS'],
-            isHidden: false,
-            isSuppressed: false,
-            isWholePartStudio: true,
-        };
-
-        this.assemblyApi
-            .createInstance({
-                did: documentId,
-                wid: workspaceId,
-                eid: elementId,
-                bTAssemblyInstanceDefinitionParams: assemblyparms,
-            })
-            .then((res) => {
-                console.log('Created Instance');
-                console.log(res);
-            });
+        // this.assemblyApi
+        //     .createInstance({
+        //         did: documentId,
+        //         wid: workspaceId,
+        //         eid: elementId,
+        //         bTAssemblyInstanceDefinitionParams: assemblyparms,
+        //     })
+        //     .then((res) => {
+        //         console.log('Created Instance');
+        //         console.log(res);
+        //     });
 
         // assembly_data = {
         //     "name": "My Assembly",
@@ -861,62 +1246,6 @@ export class App extends BaseApp {
         // alert(
         //     `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO an assembly`
         // );
-        this.documentApi.getDocument({ did: item.id }).then((res) => {
-            console.log('Get Document');
-            console.log(res);
-        });
-
-        if (
-            item.defaultWorkspace === undefined ||
-            item.defaultWorkspace.id === undefined ||
-            item.defaultWorkspace.id === null ||
-            item.defaultElementId === undefined ||
-            item.defaultElementId === null
-        ) {
-            alert('No default workspace/element ID, unable to insert');
-            return;
-        }
-
-        // We have a default workspace/element ID, let's figure out what type it is
-        // If there is no default workspace or elements then we need to figure out what workspaces there are.
-        this.documentApi
-            .getElementsInDocument({
-                did: item.id,
-                wvm: 'w',
-                wvmid: item.defaultWorkspace.id,
-                elementId: item.defaultElementId,
-            })
-            .then((res) => {
-                console.log('Get Elements in Document');
-                console.log(res);
-            });
-        this.partApi
-            .getPartsWMVE({
-                did: item.id,
-                wvm: 'w',
-                wvmid: item.defaultWorkspace.id,
-                eid: item.defaultElementId,
-            })
-            .then((res) => {
-                console.log('Get Parts');
-                console.log(res);
-            });
-        this.elementApi
-            .getConfiguration({
-                did: item.id,
-                wvm: 'w',
-                wvmid: item.defaultWorkspace.id,
-                eid: item.defaultElementId,
-            })
-            .then((res) => {
-                console.log('Get Configuration');
-                console.log(res);
-                if (res.configurationParameters.length > 0) {
-                    alert('Must select configuration');
-                } else {
-                    alert('Simple item to insert');
-                }
-            });
     }
     /**
      * Process a single node entry
@@ -986,16 +1315,32 @@ export class App extends BaseApp {
         }
         // And create a place holder for all the entries
         const table = new JTTable({
-            class: 'os-documents-list os-items-table full-width',
+            class: 'os-documents-listx os-items-table full-width',
         }).generate();
         table.setAttribute('id', 'glist');
         dumpNodes.appendChild(table);
 
-        if (treeHref !== undefined && treeHref !== '') {
-            this.OnshapeRequest(
-                treeHref + '?getPathToRoot=true',
-                BTGlobalTreeNodesInfoFromJSON
-            )
+        if (
+            treeHref !== undefined &&
+            treeHref !== '' &&
+            treeHref.indexOf('/team/') >= 0
+        ) {
+            // If we have /team/ in the href then
+            // if (treeHref !== undefined && treeHref !== '') {
+            this.globaltreenodesApi
+                .globalTreeNodesTeamInsertables({
+                    teamId: id,
+                    getPathToRoot: true,
+                    includeAssemblies: true,
+                    includeFlattenedBodies: true,
+                    includeParts: true,
+                    includeSketches: false,
+                    includeSurfaces: false,
+                })
+                // this.OnshapeRequest(
+                //     treeHref + '?getPathToRoot=true',
+                //     BTGlobalTreeNodesInfoFromJSON
+                // )
                 .then((res) => {
                     this.setBreadcrumbs(res.pathToRoot);
                     this.ProcessNodeResults(res);
@@ -1007,7 +1352,16 @@ export class App extends BaseApp {
                 });
         } else {
             this.globaltreenodesApi
-                .globalTreeNodesFolder({ fid: id, getPathToRoot: true })
+                .globalTreeNodesFolderInsertables({
+                    fid: id,
+                    getPathToRoot: true,
+                    includeAssemblies: true,
+                    includeFlattenedBodies: true,
+                    includeParts: true,
+                    includeSketches: false,
+                    includeSurfaces: false,
+                })
+                //                .globalTreeNodesFolder({ fid: id, getPathToRoot: true })
                 .then((res) => {
                     this.setBreadcrumbs(res.pathToRoot);
                     this.ProcessNodeResults(res);
@@ -1020,3 +1374,96 @@ export class App extends BaseApp {
         }
     }
 }
+
+// itemTreeDiv                <div class="select-item-tree">
+//                                <!--Element level insertables-->
+// itemParentGroup                <div class="select-item-parent-group">
+// itemParentRow                      <div class="select-item-dialog-item-row parent-item-expander-row os-selectable-item">
+//                                        <!--Element level collapse/expand buttons-->
+// levelControlButtons                    <div class="ns-select-item-dialog-item-expand-collapse">
+// imgExpand                                 <img src="https://cad.onshape.com/images/expanded.svg">
+//                                        </div>
+// divParentItem                          <div class="select-item-dialog-item parent-item">
+//                                            <!--Element level image/icon/thumbnail container-->
+// divParentThumbnailContainer                <div class="select-item-dialog-thumbnail-container os-no-shrink">
+//                                            <!--Element level thumbnail-->
+// imgParentThumbnail                         <img src="data:image/png;base64,xxxxxx">
+//                                        </div>
+//                                        <!--Element level display name-->
+// divParentTitle                         <div class="select-item-dialog-item-name">
+//                                            Aluminum Channel (Configurable)
+//                                        </div>
+//                                    </div>
+//                                </div>
+//                                <!-- Configuration selector -->
+//                                <div class="select-item-configuration-selector">
+
+//   <div>
+//   <div class="select-item-dialog-item-row child-item-container os-selectable-item">
+//   <!-- Configuration selector -->
+//   <div class="select-item-configuration-selector">
+//   <!-- Configuration parameters -->
+//      <span class="os-param-wrapper os-param-select">
+//         <label class="os-param-label"><span>Length</span></label>
+
+//         <div class="os-select-container os-select-bootstrap dropdown ng-not-empty ng-valid">
+//         <div class="os-select-match">
+//            <span class="os-select-match-text float-start">
+//               <select id="ccc" style="border:none; width:100%">
+//                  <option value="Copy_of_3_00___3_Hole_">1.50" (1 Hole)   </option>
+//                  <option value="_3_00___2_Hole_">3.00" (3 Hole)   </option>
+//                  <option value="_3_75___4_Hole_">3.75" (4 Hole)   </option>
+//                  <option value="_4_50___5_Hole_">4.50" (5 Hole)   </option>
+//                  <option value="_6_00___7_Hole_">6.00" (7 Hole)   </option>
+//                  <option value="_7_50___9_Hole_">7.50" (9 Hole)   </option>
+//                  <option value="_9_00___11_Hole_">9.00" (11 Hole)  </option>
+//                  <option value="_10_50___13_Hole_">10.50" (13 Hole) </option>
+//                  <option value="_12_00___15_Hole_">12.00" (15 Hole) </option>
+//                  <option value="_13_50___17_Hole_">13.50" (17 Hole) </option>
+//                  <option value="_15_00___19_Hole_">15.00" (19 Hole) </option>
+//                  <option value="_16_50___21_Hole_">16.50" (21 Hole) </option>
+//                  <option value="_18_00___23_Hole_">18.00" (23 Hole) </option>
+//                  <option value="_21_0___27_Hole_">21.0" (27 Hole)  </option>
+//                  <option value="_24_0___31_Hole_">24.0" (31 Hole)  </option>
+//                  <option value="_36_0___47_Hole_">36.0" (47 Hole)  </option>
+//                  <option value="_48_0___63_Hole_">48.0" (63 Hole)  </option>
+//               </select>
+//            </span>
+//         </div>
+//      </span>
+//   </div>
+// </div>
+// </div>
+//       <!--Child level insertables-->
+//       <div>
+//          <div class="select-item-dialog-item-row child-item-container os-selectable-item">
+//             <div class="select-item-dialog-item child-item" data-bs-original-title="3.00&quot; Aluminum Channel 585442">
+//                <!--Child level image/icon/thumbnail container-->
+//                <div class="select-item-dialog-thumbnail-container os-no-shrink">
+//                   <!--Child level thumbnail-->
+//                   <img src="/api/thumbnails/22f83f1be3e53004c07b6a491ec84af2939961cc/s/70x40?t=18bdb24e5837e17e04fd00f7&amp;rejectEmpty=true">
+//                </div>
+
+//                <!--Child level display name-->
+//                <div class="select-item-dialog-item-name">
+//                  3.00" Aluminum Channel 585442
+//                </div>
+//             </div>
+//          </div>
+//       </div>
+//    </div>
+// </div>
+
+//  childContainerDiv        <div class="select-item-dialog-item-row child-item-container os-selectable-item" >
+//    dialogItemDiv              <div class="select-item-dialog-item child-item">
+//                                   <!--Child level image/icon/thumbnail container-->
+//      childThumbnailDiv            <div class="select-item-dialog-thumbnail-container os-no-shrink">
+//                                       <!--Child level thumbnail-->
+//        imgChildThumbnail              <img src="/api/thumbnails/22f83f1be3e53004c07b6a491ec84af2939961cc/s/70x40?t=18bdb24e5837e17e04fd00f7&amp;rejectEmpty=true">
+//                                   </div>
+//                                   <!--Child level display name-->
+//      childNameDiv                 <div class="select-item-dialog-item-name">
+//                                      3.00" Aluminum Channel 585442
+//                                   </div>
+//                               </div>
+//                           </div>

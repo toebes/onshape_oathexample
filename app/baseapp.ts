@@ -33,14 +33,25 @@ import * as runtime from 'onshape-typescript-fetch/runtime';
 import { URLApi } from './urlapi';
 import {
     GlobalTreeNodesApi,
-    BTThumbnailInfo,
     MetadataApi,
     ElementApi,
     DocumentApi,
     PartApi,
     PartStudioApi,
     AssemblyApi,
+    ThumbnailApi,
+    InsertableApi,
+    BTDocumentSummaryInfo,
 } from 'onshape-typescript-fetch';
+import { createDocumentElement } from './common/jttable';
+
+// Optional parameters when creating a thumbnail
+type createThumbnailOptions = {
+    width?: number;
+    height?: number;
+    retry?: boolean;
+    retryInterval?: number;
+};
 
 /**
  * BaseApp contains all the support routines that your application will need.
@@ -72,6 +83,8 @@ export class BaseApp {
     public documentApi: DocumentApi;
     public assemblyApi: AssemblyApi;
     public partstudioApi: PartStudioApi;
+    public thumbnailApi: ThumbnailApi;
+    public insertableApi: InsertableApi;
     public partApi: PartApi;
     public urlAPI: URLApi;
     public configuration: runtime.Configuration;
@@ -106,39 +119,13 @@ export class BaseApp {
      * Get a thumbnail for an Onshape hosted image
      * This addresses the issue where we want to do <img src="https://cad.onshape.com/...">
      * But it can't be displayed by the browser because we don't have the Bearer token on the request
-     *
-     * @param thumbnail thumbnailItem information to be retrieved
-     * @param height Height of the rendered image (default = 60)
-     * @param width Width of the rendered image (default = 60)
+     * This will effectively be a lazy load, populating the image when it becomes available
+     * @param url URL of image to retrieve
      * @returns base 64 image data string
      */
-    public getThumbnail(
-        thumbnail: BTThumbnailInfo,
-        height: number = 60,
-        width: number = 60
-    ): Promise<string> {
+    public getOnshapeThumbnail(url: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            // TODO: Walk through the list of sizes to see if any are ideal for what we want
-            // For now we use the default URL and tell them to resize it on the fly for us
-            let tryurl = thumbnail.href;
-            if (thumbnail.sizes !== undefined && thumbnail.sizes.length > 0) {
-                tryurl = thumbnail.sizes[0].href;
-            }
             let xhr = new XMLHttpRequest();
-
-            if (tryurl === null) {
-                resolve(
-                    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAAy0lEQVRIie2VXQ6CMBCEP7yDXkEjeA/x/icQgrQcAh9czKZ0qQgPRp1kk4ZZZvYnFPhjJi5ABfRvRgWUUwZLxIe4asEsMOhndmzhqbtZSdDExxh0EhacRBIt46V5oJDwEd4BuYQjscc90ATiJ8UfgFvEXPNNqotCKtEvF8HZS87wLAeOijeRTwhahsNoWmVi4pWRhLweqe4qCp1kLVUv3UX4VgtaX7IXbmsU0knuzuCz0SEwWIovvirqFTSrKbLkcZ8v+RecVyjyl3AHdAl3ObMLisAAAAAASUVORK5CYII='
-                );
-                return;
-            }
-            let url = this.myserver + this.fixOnshapeURI(tryurl);
-            if (url.indexOf('?') < 0) {
-                url += '?';
-            } else {
-                url += '&';
-            }
-            url += `outputHeight=${height}&outputWidth=${width}&pixelSize=0`;
 
             xhr.open('GET', url, true);
             xhr.setRequestHeader(
@@ -146,29 +133,97 @@ export class BaseApp {
                 'Bearer ' + this.access_token
             );
             xhr.setRequestHeader('X-Server', this.server);
+            xhr.setRequestHeader(
+                'Accept',
+                'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+            );
             // We want to get a blob so that it isn't UTF-8 encoded along the way
             xhr.responseType = 'blob';
 
             xhr.onreadystatechange = () => {
                 if (xhr.readyState === 4) {
                     if (xhr.status === 200) {
-                        // Parse out the downloaded image into a data URL (this automatically base64 encodes it)
-                        var reader = new FileReader();
-                        reader.readAsDataURL(xhr.response);
-                        reader.onloadend = function () {
-                            resolve(reader.result.toString());
-                        };
+                        if (
+                            xhr.response.size === 0 ||
+                            xhr.response.type === 'text/xml'
+                        ) {
+                            reject('Not Found');
+                        } else {
+                            // Parse out the downloaded image into a data URL (this automatically base64 encodes it)
+                            var reader = new FileReader();
+                            reader.readAsDataURL(xhr.response);
+                            reader.onloadend = function () {
+                                resolve(reader.result.toString());
+                            };
+                        }
                     } else {
-                        // Something wennt wrong so give them a blank image
-                        resolve(
-                            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAAy0lEQVRIie2VXQ6CMBCEP7yDXkEjeA/x/icQgrQcAh9czKZ0qQgPRp1kk4ZZZvYnFPhjJi5ABfRvRgWUUwZLxIe4asEsMOhndmzhqbtZSdDExxh0EhacRBIt46V5oJDwEd4BuYQjscc90ATiJ8UfgFvEXPNNqotCKtEvF8HZS87wLAeOijeRTwhahsNoWmVi4pWRhLweqe4qCp1kLVUv3UX4VgtaX7IXbmsU0knuzuCz0SEwWIovvirqFTSrKbLkcZ8v+RecVyjyl3AHdAl3ObMLisAAAAAASUVORK5CYII='
-                        );
+                        reject(xhr.responseText);
                     }
                 }
             };
             xhr.send();
         });
     }
+    /**
+     *
+     * @param item Onshape element to display thumbnail for
+     * @param options Options to control the display
+     *                height (default 40) is height of the image to request
+     *                width (default 70) is the width of the image to request
+     *                retry indicates that we should retry the image if it isn't found
+     *                retryInterval (default 2) is how frequently in seconds we should retry to get the image
+     * @returns HTMLElement of the image dom element
+     */
+    public createThumbnailImage(
+        item: BTDocumentSummaryInfo,
+        options?: createThumbnailOptions
+    ): HTMLElement {
+        let { height = 40, width = 70, retry = false, retryInterval = 1 } = {};
+        const targetsize = `${width}x${height}`;
+        let verPart = '';
+        if (
+            item.recentVersion !== undefined &&
+            item.recentVersion !== null &&
+            item.recentVersion.id !== undefined &&
+            item.recentVersion.id !== null
+        ) {
+            verPart = `/v/${item.recentVersion.id}`;
+        }
+        let imageURL = `${this.myserver}/api/thumbnails/d/${item.id}${verPart}/s/${width}x${height}`;
+        if (item.thumbnail !== undefined && item.thumbnail !== null) {
+            // We have a potential thumbnail URI we can work from
+            // See if we can find a URI that matches
+            for (let thumbnailInfo of item.thumbnail.sizes) {
+                if (
+                    thumbnailInfo.size === targetsize &&
+                    thumbnailInfo.href !== undefined &&
+                    thumbnailInfo.href !== null
+                ) {
+                    imageURL = thumbnailInfo.href;
+                    break;
+                }
+            }
+        }
+        const imgChildThumbnail = createDocumentElement('img', {
+            src: 'https://cad.onshape.com/images/default-document.png',
+            width: String(width),
+            height: String(height),
+        });
+
+        this.getOnshapeThumbnail(imageURL)
+            .then((src) => {
+                imgChildThumbnail.setAttribute('src', src);
+            })
+            .catch((err) => {
+                if (retry) {
+                    setTimeout(() => {
+                        // TODO: Figure out how to cleanly rerun the operation without getting heavily recursive.
+                    }, 1000 * retryInterval);
+                }
+            });
+        return imgChildThumbnail;
+    }
+
     /**
      * Request refreshing the token because it has expired
      */
@@ -231,6 +286,9 @@ export class BaseApp {
      * @returns Cleaned up URI that can be passed to
      */
     public fixOnshapeURI(uri: string): string {
+        if (uri === undefined || uri === null) {
+            return '';
+        }
         const apipos = uri.indexOf('/api/');
         if (apipos >= 0) {
             uri = uri.substring(apipos);
@@ -334,6 +392,8 @@ export class BaseApp {
         this.globaltreenodesApi = new GlobalTreeNodesApi(this.configuration);
         this.medadataApi = new MetadataApi(this.configuration);
         this.elementApi = new ElementApi(this.configuration);
+        this.thumbnailApi = new ThumbnailApi(this.configuration);
+        this.insertableApi = new InsertableApi(this.configuration);
         this.documentApi = new DocumentApi(this.configuration);
         this.assemblyApi = new AssemblyApi(this.configuration);
         this.partstudioApi = new PartStudioApi(this.configuration);

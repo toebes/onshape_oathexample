@@ -46,6 +46,30 @@ export function classListAdd(elem: HTMLElement, classlist: string) {
     });
 }
 
+export function createDocumentElement(
+    tagName: string,
+    attributes?: { [index: string]: string }
+) {
+    const elem = document.createElement(tagName);
+    if (attributes !== undefined && attributes !== null) {
+        for (let attr in attributes) {
+            if (attr === 'class') {
+                classListAdd(elem, attributes[attr]);
+            } else {
+                elem.setAttribute(attr, attributes[attr]);
+            }
+        }
+    }
+    return elem;
+}
+
+const itemTreeDiv = document.createElement('div');
+itemTreeDiv.classList.add('select-item-tree');
+export function classListxxAdd(elem: HTMLElement, classlist: string) {
+    classlist.split(' ').forEach((val: string) => {
+        elem.classList.add(val);
+    });
+}
 /**
  * Determines the type of a parameter for a new row so that you
  * don't have to pass in the class or other attributes if you only
