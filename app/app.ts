@@ -932,10 +932,12 @@ export class App extends BaseApp {
 
         // Start the process off with the first in the magic list
         for (const item of items) {
+            let configurable = false;
             if (
                 item.configurationParameters !== undefined &&
                 item.configurationParameters !== null
             ) {
+                configurable = true;
                 await this.outputConfigurationOptions(item, itemParentGroup);
             }
             // Now we need to output the actual item.
@@ -957,6 +959,32 @@ export class App extends BaseApp {
             dialogItemDiv.append(childThumbnailDiv);
             dialogItemDiv.append(childNameDiv);
             childContainerDiv.append(dialogItemDiv);
+
+            if (configurable) {
+                childContainerDiv.onclick = () => {
+                    console.log(
+                        'Need to figure out configuration options settings.. But going to run it anyway'
+                    );
+                    console.log(item);
+                    this.insertToTarget(
+                        this.documentId,
+                        this.workspaceId,
+                        this.elementId,
+                        item
+                    );
+                };
+            } else {
+                childContainerDiv.onclick = () => {
+                    console.log(item);
+                    this.insertToTarget(
+                        this.documentId,
+                        this.workspaceId,
+                        this.elementId,
+                        item
+                    );
+                };
+            }
+
             itemParentGroup.append(childContainerDiv);
         }
     }
@@ -1123,16 +1151,15 @@ export class App extends BaseApp {
                 wid: workspaceId,
                 eid: elementId,
                 bTAssemblyInstanceDefinitionParams: {
-                    _configuration: '',
+                    _configuration: item._configuration,
                     documentId: item.documentId,
                     elementId: item.elementId,
                     featureId: '', // item.featureId,
                     isAssembly: item.elementType == 'ASSEMBLY',
                     isWholePartStudio: false, // TODO: Figure this out
                     microversionId: '', // item.microversionId,  // If you do this, it gives an error 400: Microversions may not be used with linked document references
-                    partId: 'JFD', // item.id, // TODO: Is this right?
+                    partId: item.deterministicId ?? '',
                     versionId: item.versionId,
-                    //_configuration: item._configuration, //
                 },
             })
             .catch((reason) => {
