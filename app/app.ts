@@ -44,12 +44,7 @@ import {
     GetInsertablesRequest,
 } from 'onshape-typescript-fetch';
 import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
-import {
-    classListAdd,
-    createDocumentElement,
-    JTRow,
-    JTTable,
-} from './common/jttable';
+import { createDocumentElement, JTRow, JTTable } from './common/jttable';
 
 export interface magicIconInfo {
     label: string;
@@ -95,24 +90,6 @@ export class App extends BaseApp {
         item: BTInsertableInfo
     ) => void = this.insertToOther;
 
-    // public magicOptions: JTSelectItem[] = [
-    //     { value: '0',  label: '0 - Recently Opened'
-    //     { value: '1',  label: '1 - My Onshape'
-    //     { value: '2',  label: '2 - Created by Me'
-    //     { value: '3',  label: '3 - Public'
-    //     { value: '4',  label: '4 - Trash'
-    //     { value: '5',  label: '5 - Tutorials & Samples'
-    //     { value: '6',  label: '6 - FeatureScript samples'
-    //     { value: '7',  label: '7 - Community spotlight'
-    //     { value: '8',  label: '8 - IOS Tutorials'
-    //     { value: '9',  label: '9 - Android Tutorials'
-    //     { value: '10', label: '10 - Labels'
-    //     { value: '11', label: '11 - Teams'
-    //     { value: '12', label: '12 - Shared with me'
-    //     { value: '13', label: '13 - Cloud Storage'
-    //     { value: '14', label: '14 - Custom table samples'
-    // ];
-
     public magicInfo: { [item: string]: magicIconInfo } = {
         '0': { icon: 'svg-icon-recentlyOpened', label: 'Recently Opened' },
         '1': { icon: 'svg-icon-myDocuments', label: 'My Onshape' },
@@ -145,20 +122,6 @@ export class App extends BaseApp {
             label: 'Custom table samples',
         },
     };
-
-    /**
-     * Get the title for a magic item
-     * @param magic
-     * @returns string to display for title
-     */
-    public getMagicTitle(magic: string): string {
-        let item = this.magicInfo[magic];
-        if (item === undefined || item === null) {
-            return magic + ' - NOT FOUND';
-        }
-        return item.label;
-    }
-
     /**
      * The main entry point for an app
      */
@@ -373,7 +336,7 @@ export class App extends BaseApp {
                     // And make it so that when they click they go to the right directory
                     breadcrumbdiv = this.createBreadcrumbNode(
                         magicinfo.icon,
-                        node.name, //magicinfo.label,
+                        node.name,
                         isLast,
                         () => {
                             this.dumpMagic(node.id);
@@ -496,7 +459,6 @@ export class App extends BaseApp {
      * @param magic Which magic list to dump
      */
     public dumpMagic(magic: string): void {
-        const magictitle = this.getMagicTitle(magic);
         // If we are in the process of running, we don't want to start things over again
         // so just ignore the call here
         if (this.running) {
@@ -656,6 +618,13 @@ export class App extends BaseApp {
             table.appendChild(rowelem);
         }
     }
+    /**
+     * Get the elements in a document
+     * @param documentId Document ID
+     * @param workspaceId Workspace ID
+     * @param elementId Specific element ID
+     * @returns Array of BTDocumentElementInfo
+     */
     public getDocumentElementInfo(
         documentId: string,
         workspaceId: string,
@@ -709,6 +678,7 @@ export class App extends BaseApp {
      *    e. Create an overlay dialog (leaving the underlying list of parts still loaded) that offers the options to choose to insert.
      *       If an item has configuration options, put them next to the part.
      *       The overlay dialog has a close button and doesn't auto close after inserting the part from the dialog.
+     *  Ok that's the goal.  It that the insertables API does a good job of filtering for most of that in one call
      */
     /**
      * Find all potential items to insert.
@@ -724,13 +694,27 @@ export class App extends BaseApp {
             // If item.defaultWorkspace is empty or item.defaultWorkspace.id is null then we need to
             // call https://cad.onshape.com/glassworks/explorer/#/Document/getDocumentWorkspaces to get a workspace
             // for now we will assume it is always provided
-
+            let wv = 'w';
+            let wvid = '';
+            if (
+                item.recentVersion !== null &&
+                item.recentVersion !== undefined
+            ) {
+                wv = 'v';
+                wvid = item.recentVersion.id;
+            } else if (
+                item.defaultWorkspace !== null &&
+                item.defaultWorkspace !== undefined
+            ) {
+                wv = 'w';
+                wvid = item.defaultWorkspace.id;
+            }
             // getInsertables
             // /documents/d/{did}/{wv}/{wvid}/insertables"
             const parameters: GetInsertablesRequest = {
                 did: item.id,
-                wv: 'v',
-                wvid: item.recentVersion.id,
+                wv: wv,
+                wvid: wvid,
                 includeParts: true,
                 includeSurfaces: false,
                 includeSketches: false,
@@ -798,6 +782,8 @@ export class App extends BaseApp {
             for (const id in insertMap) {
                 const element = insertMap[id];
                 if (
+                    element !== undefined &&
+                    element !== null &&
                     element.parentId !== undefined &&
                     element.parentId !== null
                 ) {
@@ -838,136 +824,20 @@ export class App extends BaseApp {
                         this.documentId,
                         this.workspaceId,
                         this.elementId,
-                        item
+                        res[0]
                     );
                 }
             } else {
                 console.log(`${res.length} choices found`);
                 this.showItemChoices(item, res);
             }
-            console.log(res);
+            //console.log(res);
         });
     }
     /**
      * Show options for a configurable item to insert
      * @param item
      */
-
-    // [
-    //     {
-    //         "btType": "BTMConfigurationParameterEnum-105",
-    //         "nodeId": "M2GYU6sysKE5ini9U",
-    //         "parameterId": "List_rQUjcTCrGVekld",
-    //         "parameterName": "Length",
-    //         "defaultValue": "_3_00___2_Hole_",
-    //         "enumName": "List_rQUjcTCrGVekld_conf",
-    //         "namespace": "",
-    //         "options": [
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "M9iXW2dbu///1PsN0",
-    //                 "option": "Copy_of_3_00___3_Hole_",
-    //                 "optionName": "1.50\" (1 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MfCX7LRsS6IBYs9/s",
-    //                 "option": "_3_00___2_Hole_",
-    //                 "optionName": "3.00\" (3 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "M2jqt3Avv2Zi672ac",
-    //                 "option": "_3_75___4_Hole_",
-    //                 "optionName": "3.75\" (4 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MExImsNcUfTmTqVw6",
-    //                 "option": "_4_50___5_Hole_",
-    //                 "optionName": "4.50\" (5 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "Maul46dnuTCtHPzV2",
-    //                 "option": "_6_00___7_Hole_",
-    //                 "optionName": "6.00\" (7 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MEUQsuAKfJnCeLQ/w",
-    //                 "option": "_7_50___9_Hole_",
-    //                 "optionName": "7.50\" (9 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MwpNQYNWx0dWrxbXh",
-    //                 "option": "_9_00___11_Hole_",
-    //                 "optionName": "9.00\" (11 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MRqRRwsSL8wcQ9Hrv",
-    //                 "option": "_10_50___13_Hole_",
-    //                 "optionName": "10.50\" (13 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MRsnog6Qo4+/cTHGu",
-    //                 "option": "_12_00___15_Hole_",
-    //                 "optionName": "12.00\" (15 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MbpRO7DRhZBl/FRP6",
-    //                 "option": "_13_50___17_Hole_",
-    //                 "optionName": "13.50\" (17 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MoHDMXEXrW5413bYK",
-    //                 "option": "_15_00___19_Hole_",
-    //                 "optionName": "15.00\" (19 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MZLTSlWzsO9hC/1/J",
-    //                 "option": "_16_50___21_Hole_",
-    //                 "optionName": "16.50\" (21 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "M4ozgb4JDgfjJWn9M",
-    //                 "option": "_18_00___23_Hole_",
-    //                 "optionName": "18.00\" (23 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "M7lnJtknvb7cZWxtT",
-    //                 "option": "_21_0___27_Hole_",
-    //                 "optionName": "21.0\" (27 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "M+MTpleBisFuuS119",
-    //                 "option": "_24_0___31_Hole_",
-    //                 "optionName": "24.0\" (31 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MGl39WDIgAhejoogL",
-    //                 "option": "_36_0___47_Hole_",
-    //                 "optionName": "36.0\" (47 Hole)"
-    //             },
-    //             {
-    //                 "btType": "BTMEnumOption-592",
-    //                 "nodeId": "MAG7BOuWYX0IK0C1U",
-    //                 "option": "_48_0___63_Hole_",
-    //                 "optionName": "48.0\" (63 Hole)"
-    //             }
-    //         ]
-    //     }
-    // ]
     public async showItemChoices(
         parent: BTDocumentSummaryInfo,
         items: BTInsertableInfo[]
@@ -979,6 +849,43 @@ export class App extends BaseApp {
         } else {
             uiDiv = document.body;
         }
+        // This is what we are creating in the DOM
+        // itemTreeDiv                <div class="select-item-tree">
+        //                                <!--Element level insertables-->
+        // itemParentGroup                <div class="select-item-parent-group">
+        // itemParentRow                      <div class="select-item-dialog-item-row parent-item-expander-row os-selectable-item">
+        //                                        <!--Element level collapse/expand buttons-->
+        // levelControlButtons                    <div class="ns-select-item-dialog-item-expand-collapse">
+        // imgExpand                                 <img src="https://cad.onshape.com/images/expanded.svg">
+        //                                        </div>
+        // divParentItem                          <div class="select-item-dialog-item parent-item">
+        //                                            <!--Element level image/icon/thumbnail container-->
+        // divParentThumbnailContainer                <div class="select-item-dialog-thumbnail-container os-no-shrink">
+        //                                            <!--Element level thumbnail-->
+        // imgParentThumbnail                         <img src="data:image/png;base64,xxxxxx">
+        //                                        </div>
+        //                                        <!--Element level display name-->
+        // divParentTitle                         <div class="select-item-dialog-item-name">
+        //                                            Aluminum Channel (Configurable)
+        //                                        </div>
+        //                                    </div>
+        //                                </div>
+        //                                <!-- Configuration selector -->
+        //                                <div class="select-item-configuration-selector">
+        //  childContainerDiv        <div class="select-item-dialog-item-row child-item-container os-selectable-item" >
+        //    dialogItemDiv              <div class="select-item-dialog-item child-item">
+        //                                   <!--Child level image/icon/thumbnail container-->
+        //      childThumbnailDiv            <div class="select-item-dialog-thumbnail-container os-no-shrink">
+        //                                       <!--Child level thumbnail-->
+        //        imgChildThumbnail              <img src="/api/thumbnails/22f83f1be3e53004c07b6a491ec84af2939961cc/s/70x40?t=18bdb24e5837e17e04fd00f7&amp;rejectEmpty=true">
+        //                                   </div>
+        //                                   <!--Child level display name-->
+        //      childNameDiv                 <div class="select-item-dialog-item-name">
+        //                                      3.00" Aluminum Channel 585442
+        //                                   </div>
+        //                               </div>
+        //                           </div>
+
         const itemTreeDiv = createDocumentElement('div', {
             class: 'select-item-tree',
         });
@@ -1053,7 +960,11 @@ export class App extends BaseApp {
             itemParentGroup.append(childContainerDiv);
         }
     }
-
+    /**
+     * Display the configuration options for an element
+     * @param item Configurable element to output
+     * @param itemParentGroup Location to put the configuration option
+     */
     public async outputConfigurationOptions(
         item: BTInsertableInfo,
         itemParentGroup: HTMLElement
@@ -1155,9 +1066,8 @@ export class App extends BaseApp {
             }
         }
     }
-
     /**
-     *
+     * Insert to an unknown tab (generally this is an error)
      * @param documentId Document to insert into
      * @param workspaceId Workspace in the document
      * @param elementId Element of parts studio to insert into
@@ -1173,7 +1083,6 @@ export class App extends BaseApp {
             `Unable to determine how to insert item ${item.id} - ${item.elementName} into ${this.targetDocumentElementInfo.elementType} ${documentId}/w/${workspaceId}/e/${elementId}`
         );
     }
-
     /**
      * Insert an item into a Parts Studio
      * @param documentId Document to insert into
@@ -1204,48 +1113,34 @@ export class App extends BaseApp {
         elementId: string,
         item: BTInsertableInfo
     ): void {
-        alert(
+        console.log(
             `Inserting item ${item.id} - ${item.elementName} into Assembly ${documentId}/w/${workspaceId}/e/${elementId}`
         );
 
-        // this.assemblyApi
-        //     .createInstance({
-        //         did: documentId,
-        //         wid: workspaceId,
-        //         eid: elementId,
-        //         bTAssemblyInstanceDefinitionParams: assemblyparms,
-        //     })
-        //     .then((res) => {
-        //         console.log('Created Instance');
-        //         console.log(res);
-        //     });
-
-        // assembly_data = {
-        //     "name": "My Assembly",
-        //     "description": "An example assembly created using the Onshape API",
-        //     "rootAssembly": True,
-        //     "subAssemblies": [
-        //         {
-        //             "documentId": "SUB_ASSEMBLY_DOCUMENT_ID",
-        //             "elementId": "SUB_ASSEMBLY_ELEMENT_ID",
-        //             "transform": [
-        //                 [1, 0, 0, 0],
-        //                 [0, 1, 0, 0],
-        //                 [0, 0, 1, 0],
-        //                 [0, 0, 0, 1]
-        //             ]
-        //         }
-        //     ]
-        // }
-        return;
-        // When inserting there are several possible situations
-        // 1. There is No default workspace/tab defined.
-        // 2. The default workspace/tab has than one part in the part studio/Assembly
-        // 3. The Part Studio/Assembly has configurations
-        // 4. It is just a Normal part.
-        // alert(
-        //     `Inserting ${item.name} from ${item.id}/w/${item.defaultWorkspace.id}/e/${item.defaultElementId} INTO an assembly`
-        // );
+        this.assemblyApi
+            .createInstance({
+                did: documentId,
+                wid: workspaceId,
+                eid: elementId,
+                bTAssemblyInstanceDefinitionParams: {
+                    _configuration: '',
+                    documentId: item.documentId,
+                    elementId: item.elementId,
+                    featureId: '', // item.featureId,
+                    isAssembly: item.elementType == 'ASSEMBLY',
+                    isWholePartStudio: false, // TODO: Figure this out
+                    microversionId: '', // item.microversionId,  // If you do this, it gives an error 400: Microversions may not be used with linked document references
+                    partId: 'JFD', // item.id, // TODO: Is this right?
+                    versionId: item.versionId,
+                    //_configuration: item._configuration, //
+                },
+            })
+            .catch((reason) => {
+                // TODO: Figure out why we don't get any output when it actually succeeds
+                if (reason !== 'Unexpected end of JSON input') {
+                    console.log(`failed to create reason=${reason}`);
+                }
+            });
     }
     /**
      * Process a single node entry
@@ -1266,6 +1161,10 @@ export class App extends BaseApp {
                 this.setRunning(false);
             });
     }
+    /**
+     *
+     * @param res
+     */
     public ProcessNodeResults(res: BTGlobalTreeNodesInfo) {
         const nodes = res as BTGlobalTreeNodesInfo;
         // When it does, append all the elements to the UI
@@ -1374,96 +1273,3 @@ export class App extends BaseApp {
         }
     }
 }
-
-// itemTreeDiv                <div class="select-item-tree">
-//                                <!--Element level insertables-->
-// itemParentGroup                <div class="select-item-parent-group">
-// itemParentRow                      <div class="select-item-dialog-item-row parent-item-expander-row os-selectable-item">
-//                                        <!--Element level collapse/expand buttons-->
-// levelControlButtons                    <div class="ns-select-item-dialog-item-expand-collapse">
-// imgExpand                                 <img src="https://cad.onshape.com/images/expanded.svg">
-//                                        </div>
-// divParentItem                          <div class="select-item-dialog-item parent-item">
-//                                            <!--Element level image/icon/thumbnail container-->
-// divParentThumbnailContainer                <div class="select-item-dialog-thumbnail-container os-no-shrink">
-//                                            <!--Element level thumbnail-->
-// imgParentThumbnail                         <img src="data:image/png;base64,xxxxxx">
-//                                        </div>
-//                                        <!--Element level display name-->
-// divParentTitle                         <div class="select-item-dialog-item-name">
-//                                            Aluminum Channel (Configurable)
-//                                        </div>
-//                                    </div>
-//                                </div>
-//                                <!-- Configuration selector -->
-//                                <div class="select-item-configuration-selector">
-
-//   <div>
-//   <div class="select-item-dialog-item-row child-item-container os-selectable-item">
-//   <!-- Configuration selector -->
-//   <div class="select-item-configuration-selector">
-//   <!-- Configuration parameters -->
-//      <span class="os-param-wrapper os-param-select">
-//         <label class="os-param-label"><span>Length</span></label>
-
-//         <div class="os-select-container os-select-bootstrap dropdown ng-not-empty ng-valid">
-//         <div class="os-select-match">
-//            <span class="os-select-match-text float-start">
-//               <select id="ccc" style="border:none; width:100%">
-//                  <option value="Copy_of_3_00___3_Hole_">1.50" (1 Hole)   </option>
-//                  <option value="_3_00___2_Hole_">3.00" (3 Hole)   </option>
-//                  <option value="_3_75___4_Hole_">3.75" (4 Hole)   </option>
-//                  <option value="_4_50___5_Hole_">4.50" (5 Hole)   </option>
-//                  <option value="_6_00___7_Hole_">6.00" (7 Hole)   </option>
-//                  <option value="_7_50___9_Hole_">7.50" (9 Hole)   </option>
-//                  <option value="_9_00___11_Hole_">9.00" (11 Hole)  </option>
-//                  <option value="_10_50___13_Hole_">10.50" (13 Hole) </option>
-//                  <option value="_12_00___15_Hole_">12.00" (15 Hole) </option>
-//                  <option value="_13_50___17_Hole_">13.50" (17 Hole) </option>
-//                  <option value="_15_00___19_Hole_">15.00" (19 Hole) </option>
-//                  <option value="_16_50___21_Hole_">16.50" (21 Hole) </option>
-//                  <option value="_18_00___23_Hole_">18.00" (23 Hole) </option>
-//                  <option value="_21_0___27_Hole_">21.0" (27 Hole)  </option>
-//                  <option value="_24_0___31_Hole_">24.0" (31 Hole)  </option>
-//                  <option value="_36_0___47_Hole_">36.0" (47 Hole)  </option>
-//                  <option value="_48_0___63_Hole_">48.0" (63 Hole)  </option>
-//               </select>
-//            </span>
-//         </div>
-//      </span>
-//   </div>
-// </div>
-// </div>
-//       <!--Child level insertables-->
-//       <div>
-//          <div class="select-item-dialog-item-row child-item-container os-selectable-item">
-//             <div class="select-item-dialog-item child-item" data-bs-original-title="3.00&quot; Aluminum Channel 585442">
-//                <!--Child level image/icon/thumbnail container-->
-//                <div class="select-item-dialog-thumbnail-container os-no-shrink">
-//                   <!--Child level thumbnail-->
-//                   <img src="/api/thumbnails/22f83f1be3e53004c07b6a491ec84af2939961cc/s/70x40?t=18bdb24e5837e17e04fd00f7&amp;rejectEmpty=true">
-//                </div>
-
-//                <!--Child level display name-->
-//                <div class="select-item-dialog-item-name">
-//                  3.00" Aluminum Channel 585442
-//                </div>
-//             </div>
-//          </div>
-//       </div>
-//    </div>
-// </div>
-
-//  childContainerDiv        <div class="select-item-dialog-item-row child-item-container os-selectable-item" >
-//    dialogItemDiv              <div class="select-item-dialog-item child-item">
-//                                   <!--Child level image/icon/thumbnail container-->
-//      childThumbnailDiv            <div class="select-item-dialog-thumbnail-container os-no-shrink">
-//                                       <!--Child level thumbnail-->
-//        imgChildThumbnail              <img src="/api/thumbnails/22f83f1be3e53004c07b6a491ec84af2939961cc/s/70x40?t=18bdb24e5837e17e04fd00f7&amp;rejectEmpty=true">
-//                                   </div>
-//                                   <!--Child level display name-->
-//      childNameDiv                 <div class="select-item-dialog-item-name">
-//                                      3.00" Aluminum Channel 585442
-//                                   </div>
-//                               </div>
-//                           </div>
