@@ -80,7 +80,7 @@ export class App extends BaseApp {
     public running = false;
     public magic = 1;
     public loaded = 0;
-    public loadedlimit = 100; // Maximum number of items we will load
+    public loadedlimit = 2500; // Maximum number of items we will load
     public targetDocumentElementInfo: BTDocumentElementInfo = {};
 
     public insertToTarget: (
@@ -442,7 +442,7 @@ export class App extends BaseApp {
     }
     /**
      * Mark the UI as running.  We disable the dropdown so that you can't request
-     * switching while in the middle of runnign
+     * switching while in the middle of running
      * @param running
      */
     public setRunning(running: boolean) {
@@ -475,11 +475,7 @@ export class App extends BaseApp {
         } else {
             dumpNodes = document.body;
         }
-        // Create a place holder for all the entries
-        const table = new JTTable({
-            class: 'os-documents-listx os-items-table full-width',
-        }).generate();
-        table.setAttribute('id', 'glist');
+        const table = this.getFileListTable();
         dumpNodes.appendChild(table);
         // Start the process off with the first in the magic list
         this.processNode(magic);
@@ -490,21 +486,7 @@ export class App extends BaseApp {
      */
     public appendElements(items: BTGlobalTreeMagicNodeInfo[]): void {
         // Figure out where we are to add the entries
-        let table = document.getElementById('glist');
-        if (table === null) {
-            const table = new JTTable({
-                class: 'os-documents-listx os-items-table full-width',
-            }).generate();
-            table.setAttribute('id', 'glist');
-
-            let appelement = document.getElementById('app');
-            // If for some reason we lost the place it is supposed to go, just append to the body
-            if (appelement === null) {
-                appelement = document.body;
-            }
-            appelement.append(table);
-        }
-        //
+        let table = this.getFileListTable();
         // Iterate over all the items
         for (let item of items) {
             const itemInfo = item as BTDocumentSummaryInfo;
@@ -617,6 +599,28 @@ export class App extends BaseApp {
             }
             table.appendChild(rowelem);
         }
+    }
+    /**
+     * Finds the documents table to append entries to.  If one doesn't
+     * already exist it will add it in the proper place.
+     * @returns Table to append entries to
+     */
+    public getFileListTable() {
+        let table = document.getElementById('glist');
+        if (table === null) {
+            table = new JTTable({
+                class: 'os-documents-listx os-items-table full-width',
+            }).generate();
+            table.setAttribute('id', 'glist');
+
+            let appelement = document.getElementById('app');
+            // If for some reason we lost the place it is supposed to go, just append to the body
+            if (appelement === null) {
+                appelement = document.body;
+            }
+            appelement.append(table);
+        }
+        return table;
     }
     /**
      * Get the elements in a document
@@ -1518,19 +1522,42 @@ export class App extends BaseApp {
             res.next !== undefined &&
             this.loaded < this.loadedlimit
         ) {
-            // Request the UI to jump to the next entry in the list.
-            // By calling setTimeout we give the UI a little break
-            // setTimeout(() => {
-            this.OnshapeRequest(res.next, BTGlobalTreeNodesInfoFromJSON).then(
-                (res) => {
-                    this.ProcessNodeResults(res as BTGlobalTreeNodesInfo);
-                }
+            // We have more entries, so lets put a little "Loading More..." element at the
+            // end of the list.  When it becomes visible because they scrolled down or because there
+            // is more room on the screen, we will delete that Loading More element and then process
+            // the next set of entries
+            const table = this.getFileListTable();
+            const moreRow = new JTRow({ class: 'os-item-row' });
+            moreRow.add({
+                celltype: 'td',
+                colspan: 5,
+                content: 'Loading More...',
+            });
+            const rowelem = moreRow.generate();
+            table.appendChild(rowelem);
+            // When the Loading More... becomes visible on the screen, we can load the next element
+            const observer = new IntersectionObserver(
+                (entry) => {
+                    if (entry[0].isIntersecting) {
+                        observer.disconnect();
+                        rowelem.remove();
+                        // Request the UI to jump to the next entry in the list.
+                        this.setRunning(true);
+                        this.OnshapeRequest(
+                            res.next,
+                            BTGlobalTreeNodesInfoFromJSON
+                        ).then((res) => {
+                            this.ProcessNodeResults(
+                                res as BTGlobalTreeNodesInfo
+                            );
+                        });
+                    }
+                },
+                { threshold: [0] }
             );
-            // }, 10);
-        } else {
-            // All done
-            this.setRunning(false);
+            observer.observe(rowelem);
         }
+        this.setRunning(false);
     }
     /**
      * Navigate into a folder and populate the UI with the contents
@@ -1555,11 +1582,7 @@ export class App extends BaseApp {
         } else {
             dumpNodes = document.body;
         }
-        // And create a place holder for all the entries
-        const table = new JTTable({
-            class: 'os-documents-listx os-items-table full-width',
-        }).generate();
-        table.setAttribute('id', 'glist');
+        const table = this.getFileListTable();
         dumpNodes.appendChild(table);
 
         if (
