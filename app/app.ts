@@ -1007,10 +1007,16 @@ export class App extends BaseApp {
         item: BTInsertableInfo,
         itemParentGroup: HTMLElement
     ) {
+        let wvm = 'v';
+        let wvmid = item.versionId ?? undefined;
+        if (wvmid === undefined) {
+            wvm = 'w';
+            wvmid = item.workspaceId;
+        }
         const itemConfig = await this.elementApi.getConfiguration({
             did: item.documentId,
-            wvm: 'v',
-            wvmid: item.versionId,
+            wvm: wvm,
+            wvmid: wvmid,
             eid: item.elementId,
         });
         console.log(
@@ -1039,6 +1045,21 @@ export class App extends BaseApp {
 
             switch (configMapping[opt.btType]) {
                 case configType.configBool: {
+                    //         {
+                    //             "btType": "BTMConfigurationParameterBoolean-2550",
+                    //             "nodeId": "MfEnrg6caclWD4RLi",
+                    //             "parameterId": "CheckBox",
+                    //             "parameterName": "MakeItRed",
+                    //             "defaultValue": true
+                    //         },
+                    // Configuration value
+                    //         {
+                    //             "btType": "BTMParameterBoolean-144",
+                    //             "nodeId": "MfG9Ciu94p/l7et/Z",
+                    //             "parameterId": "CheckBox",
+                    //             "value": true
+                    //         },
+
                     const optBool = opt as BTMConfigurationParameterBoolean2550;
                     console.log(
                         `Boolean option ${optBool.parameterName} default=${optBool.defaultValue}`
@@ -1046,6 +1067,76 @@ export class App extends BaseApp {
                     break;
                 }
                 case configType.configEnum: {
+                    //         {
+                    //             "btType": "BTMConfigurationParameterEnum-105",
+                    //             "nodeId": "M3EHnVsn3XTZa53Ke",
+                    //             "parameterId": "List_xhwsnzXruq3Ri4",
+                    //             "parameterName": "Which Extra Block",
+                    //             "defaultValue": "Default",
+                    //             "enumName": "List_xhwsnzXruq3Ri4_conf",
+                    //             "namespace": "",
+                    //             "options": [
+                    //                 {
+                    //                     "btType": "BTMEnumOption-592",
+                    //                     "nodeId": "MnV7gQh05+fQmuqci",
+                    //                     "option": "Default",
+                    //                     "optionName": "Item1"
+                    //                 },
+                    //                 {
+                    //                     "btType": "BTMEnumOption-592",
+                    //                     "nodeId": "MGhqJCa5OPBd4+lLL",
+                    //                     "option": "Item2",
+                    //                     "optionName": "Item2"
+                    //                 },
+                    //                 {
+                    //                     "btType": "BTMEnumOption-592",
+                    //                     "nodeId": "MPOPNFAzj/yIOshGn",
+                    //                     "option": "Item_3",
+                    //                     "optionName": "Item 3"
+                    //                 }
+                    //             ]
+                    //         },
+                    //         {
+                    //             "btType": "BTMConfigurationParameterEnum-105",
+                    //             "nodeId": "M4uNTty2y5T8l/CFE",
+                    //             "parameterId": "List_qZ128Eq2HMz4pF",
+                    //             "parameterName": "Bottom Square Color",
+                    //             "defaultValue": "Default",
+                    //             "enumName": "List_qZ128Eq2HMz4pF_conf",
+                    //             "namespace": "",
+                    //             "options": [
+                    //                 {
+                    //                     "btType": "BTMEnumOption-592",
+                    //                     "nodeId": "MZ95LPxFsFeoDzfu7",
+                    //                     "option": "Default",
+                    //                     "optionName": "Red"
+                    //                 },
+                    //                 {
+                    //                     "btType": "BTMEnumOption-592",
+                    //                     "nodeId": "MzaWkmJyhZdMunIkc",
+                    //                     "option": "R",
+                    //                     "optionName": "Blue"
+                    //                 }
+                    //             ]
+                    //         }
+                    // Current Configuration
+                    //         {
+                    //             "btType": "BTMParameterEnum-145",
+                    //             "nodeId": "MIHuR+jMFKM3B4EUN",
+                    //             "parameterId": "List_xhwsnzXruq3Ri4",
+                    //             "enumName": "List_xhwsnzXruq3Ri4_conf",
+                    //             "namespace": "",
+                    //             "value": "Default"
+                    //         },
+                    //         {
+                    //             "btType": "BTMParameterEnum-145",
+                    //             "nodeId": "MIVPvJnDzaK8lFe2F",
+                    //             "parameterId": "List_qZ128Eq2HMz4pF",
+                    //             "enumName": "List_qZ128Eq2HMz4pF_conf",
+                    //             "namespace": "",
+                    //             "value": "Default"
+                    //         }
+
                     const optEnum = opt as BTMConfigurationParameterEnum105;
 
                     const divContainer = createDocumentElement('div', {
@@ -1083,6 +1174,21 @@ export class App extends BaseApp {
                     break;
                 }
                 case configType.configString: {
+                    //         {
+                    //             "btType": "BTMConfigurationParameterString-872",
+                    //             "nodeId": "Mj6bWjD/bLdPLQbhf",
+                    //             "parameterId": "TestVariable",
+                    //             "parameterName": "TestVariable",
+                    //             "defaultValue": "Some Value"
+                    //         },
+                    // CURRENT CONFIGURATION
+                    //         {
+                    //             "btType": "BTMParameterString-149",
+                    //             "nodeId": "MYOSYLAAKhyIVRctv",
+                    //             "parameterId": "TestVariable",
+                    //             "value": "Some Value"
+                    //         },
+
                     const optString = opt as BTMConfigurationParameterString872;
                     console.log(
                         `String option ${optString.parameterName} default=${optString.defaultValue}`
@@ -1091,6 +1197,187 @@ export class App extends BaseApp {
                     break;
                 }
                 case configType.configQuantity: {
+                    //         {
+                    //             "btType": "BTMConfigurationParameterQuantity-1826",
+                    //             "nodeId": "Mmo70rFbGwU68Df/1",
+                    //             "parameterId": "LengthVariable",
+                    //             "parameterName": "LengthVariable",
+                    //             "quantityType": "LENGTH",
+                    //             "rangeAndDefault": {
+                    //                 "btType": "BTQuantityRange-181",
+                    //                 "defaultValue": 1,
+                    //                 "location": {
+                    //                     "btType": "BTLocationInfo-226",
+                    //                     "character": 0,
+                    //                     "column": 0,
+                    //                     "document": "",
+                    //                     "elementMicroversion": "",
+                    //                     "endCharacter": 0,
+                    //                     "endColumn": 0,
+                    //                     "endLine": 0,
+                    //                     "languageVersion": 0,
+                    //                     "line": 0,
+                    //                     "moduleIds": {
+                    //                         "btType": "BTDocumentVersionElementIds-1897",
+                    //                         "documentId": "",
+                    //                         "elementId": "",
+                    //                         "versionId": ""
+                    //                     },
+                    //                     "nodeId": "OM199BEOlSat7Lax",
+                    //                     "parseNodeId": "",
+                    //                     "topLevel": "",
+                    //                     "version": ""
+                    //                 },
+                    //                 "maxValue": 100000,
+                    //                 "minValue": 0,
+                    //                 "units": "millimeter"
+                    //             }
+                    //         },
+                    //         {
+                    //             "btType": "BTMConfigurationParameterQuantity-1826",
+                    //             "nodeId": "M/seEMAIsBKBBZYWx",
+                    //             "parameterId": "Angle_Variable",
+                    //             "parameterName": "Angle Variable",
+                    //             "quantityType": "ANGLE",
+                    //             "rangeAndDefault": {
+                    //                 "btType": "BTQuantityRange-181",
+                    //                 "defaultValue": 1,
+                    //                 "location": {
+                    //                     "btType": "BTLocationInfo-226",
+                    //                     "character": 0,
+                    //                     "column": 0,
+                    //                     "document": "",
+                    //                     "elementMicroversion": "",
+                    //                     "endCharacter": 0,
+                    //                     "endColumn": 0,
+                    //                     "endLine": 0,
+                    //                     "languageVersion": 0,
+                    //                     "line": 0,
+                    //                     "moduleIds": {
+                    //                         "btType": "BTDocumentVersionElementIds-1897",
+                    //                         "documentId": "",
+                    //                         "elementId": "",
+                    //                         "versionId": ""
+                    //                     },
+                    //                     "nodeId": "AaJGdfFtZIPTXkkl",
+                    //                     "parseNodeId": "",
+                    //                     "topLevel": "",
+                    //                     "version": ""
+                    //                 },
+                    //                 "maxValue": 180,
+                    //                 "minValue": 0,
+                    //                 "units": "degree"
+                    //             }
+                    //         },
+                    //         {
+                    //             "btType": "BTMConfigurationParameterQuantity-1826",
+                    //             "nodeId": "MRa0AD/lJCJExUBuN",
+                    //             "parameterId": "Integer_Variable",
+                    //             "parameterName": "Holes",
+                    //             "quantityType": "INTEGER",
+                    //             "rangeAndDefault": {
+                    //                 "btType": "BTQuantityRange-181",
+                    //                 "defaultValue": 1,
+                    //                 "location": {
+                    //                     "btType": "BTLocationInfo-226",
+                    //                     "character": 0,
+                    //                     "column": 0,
+                    //                     "document": "",
+                    //                     "elementMicroversion": "",
+                    //                     "endCharacter": 0,
+                    //                     "endColumn": 0,
+                    //                     "endLine": 0,
+                    //                     "languageVersion": 0,
+                    //                     "line": 0,
+                    //                     "moduleIds": {
+                    //                         "btType": "BTDocumentVersionElementIds-1897",
+                    //                         "documentId": "",
+                    //                         "elementId": "",
+                    //                         "versionId": ""
+                    //                     },
+                    //                     "nodeId": "w2Y9xvyKSWPVRqea",
+                    //                     "parseNodeId": "",
+                    //                     "topLevel": "",
+                    //                     "version": ""
+                    //                 },
+                    //                 "maxValue": 42,
+                    //                 "minValue": 0,
+                    //                 "units": ""
+                    //             }
+                    //         },
+                    //         {
+                    //             "btType": "BTMConfigurationParameterQuantity-1826",
+                    //             "nodeId": "Mv1mu6Q3Y3AK0CpWS",
+                    //             "parameterId": "RealVariable",
+                    //             "parameterName": "RealVariable",
+                    //             "quantityType": "REAL",
+                    //             "rangeAndDefault": {
+                    //                 "btType": "BTQuantityRange-181",
+                    //                 "defaultValue": 1,
+                    //                 "location": {
+                    //                     "btType": "BTLocationInfo-226",
+                    //                     "character": 0,
+                    //                     "column": 0,
+                    //                     "document": "",
+                    //                     "elementMicroversion": "",
+                    //                     "endCharacter": 0,
+                    //                     "endColumn": 0,
+                    //                     "endLine": 0,
+                    //                     "languageVersion": 0,
+                    //                     "line": 0,
+                    //                     "moduleIds": {
+                    //                         "btType": "BTDocumentVersionElementIds-1897",
+                    //                         "documentId": "",
+                    //                         "elementId": "",
+                    //                         "versionId": ""
+                    //                     },
+                    //                     "nodeId": "k0PqqEWhhn+5RtpL",
+                    //                     "parseNodeId": "",
+                    //                     "topLevel": "",
+                    //                     "version": ""
+                    //                 },
+                    //                 "maxValue": 4242,
+                    //                 "minValue": 0,
+                    //                 "units": ""
+                    //             }
+                    //         },
+                    // CURRENT CONFIGURATION
+                    //         {
+                    //             "btType": "BTMParameterQuantity-147",
+                    //             "nodeId": "Mc29VgTsa8DroMmRF",
+                    //             "parameterId": "LengthVariable",
+                    //             "expression": "1 mm",
+                    //             "isInteger": false,
+                    //             "units": "millimeter",
+                    //             "value": 1
+                    //         },
+                    //         {
+                    //             "btType": "BTMParameterQuantity-147",
+                    //             "nodeId": "MfOOsDGbkJP0eGPPv",
+                    //             "parameterId": "Angle_Variable",
+                    //             "expression": "1 deg",
+                    //             "isInteger": false,
+                    //             "units": "degree",
+                    //             "value": 1
+                    //         },
+                    //         {
+                    //             "btType": "BTMParameterQuantity-147",
+                    //             "nodeId": "MOexZL5H5t709dSXe",
+                    //             "parameterId": "Integer_Variable",
+                    //             "expression": "1",
+                    //             "isInteger": false,
+                    //             "units": "",
+                    //             "value": 1
+                    //         },
+                    //         {
+                    //             "btType": "BTMParameterQuantity-147",
+                    //             "nodeId": "M6jIL2Bz4RrleG0oB",
+                    //             "parameterId": "RealVariable",
+                    //             "expression": "1",
+                    //             "isInteger": false,
+                    //             "units": "",
+                    //             "value": 1
+                    //         },
                     const optQuantity =
                         opt as BTMConfigurationParameterQuantity1826;
                     console.log(
