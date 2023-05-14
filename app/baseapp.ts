@@ -28,7 +28,7 @@
 
 'use strict';
 
-import { ExchangeToken, IExchangeToken } from './oauth';
+import { ExchangeToken, IExchangeToken, RefreshToken } from './oauth';
 import * as runtime from 'onshape-typescript-fetch/runtime';
 import { URLApi } from './urlapi';
 import {
@@ -123,10 +123,11 @@ export class BaseApp {
      * @param url URL of image to retrieve
      * @returns base 64 image data string
      */
-    public getOnshapeThumbnail(url: string): Promise<string> {
+    public getOnshapeThumbnail(urlReq: string): Promise<string> {
         return new Promise((resolve, reject) => {
             let xhr = new XMLHttpRequest();
 
+            const url = this.myserver + this.fixOnshapeURI(urlReq);
             xhr.open('GET', url, true);
             xhr.setRequestHeader(
                 'Authorization',
@@ -270,14 +271,33 @@ export class BaseApp {
         this.setAppElements(h2);
     }
     /**
-     *
+     * Get the current access token (refreshing it if it has expired)
      * @returns Promise to the access token
      */
     public getAccessToken(): Promise<string> {
         return new Promise<string>((resolve, reject) => {
-            // TODO: Check lifetime of bearer token and if needed request a new one
-            // <InvalidTokenException><error>invalid_token</error><error_description>Invalid access token</error_description></InvalidTokenException>
-            resolve('Bearer ' + this.access_token);
+            const now = new Date();
+            if (now >= this.expires_token) {
+                RefreshToken(this.myserver + '/refresh.php', this.refresh_token)
+                    .then((v: IExchangeToken) => {
+                        const now = new Date();
+
+                        // We have successfully refreshed the token so let the app continue
+                        this.access_token = v.access_token;
+                        this.refresh_token = v.refresh_token;
+                        this.expires_token = new Date(
+                            now.getTime() + v.expires_in * 1000
+                        );
+
+                        resolve('Bearer ' + this.access_token);
+                    })
+                    .catch((reason: string) => {
+                        // Something went wrong, so let the user know
+                        this.failApp(reason);
+                    });
+            } else {
+                resolve('Bearer ' + this.access_token);
+            }
         });
     }
     /**

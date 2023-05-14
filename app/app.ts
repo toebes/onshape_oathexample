@@ -737,6 +737,7 @@ export class App extends BaseApp {
 
             let insertables = await this.documentApi.getInsertables(parameters);
             const result: BTInsertableInfo[] = [];
+            let donotuseelement: BTInsertableInfo = undefined;
             const insertMap = new Map<string, BTInsertableInfo>();
             const dropParents = new Map<string, Boolean>();
             while (insertables !== undefined && insertables.items.length > 0) {
@@ -753,6 +754,9 @@ export class App extends BaseApp {
                         ) {
                             // We want to save it
                             insertMap[element.id] = element;
+                        } else {
+                            // Save for the special case of the DO NOT USE ICON which would be the only object in the document
+                            donotuseelement = element;
                         }
                         if (
                             element.parentId !== undefined &&
@@ -798,7 +802,10 @@ export class App extends BaseApp {
                     }
                 }
             }
-
+            // Special case when we have a document with a do not use and it is the only thing, let them insert it
+            if (result.length === 0 && donotuseelement !== undefined) {
+                result.push(donotuseelement);
+            }
             resolve(result);
         });
     }
@@ -811,7 +818,10 @@ export class App extends BaseApp {
             item,
             this.targetDocumentElementInfo.elementType
         ).then((res) => {
-            if (res.length === 1) {
+            if (res.length === 0) {
+                // Nothing was insertable at all, so we just need to let them know that
+                alert('Nothing is insertable from this document');
+            } else if (res.length === 1) {
                 if (
                     res[0].configurationParameters !== undefined &&
                     res[0].configurationParameters !== null
@@ -1145,6 +1155,8 @@ export class App extends BaseApp {
             `Inserting item ${item.id} - ${item.elementName} into Assembly ${documentId}/w/${workspaceId}/e/${elementId}`
         );
 
+        this.setInProgress();
+
         this.assemblyApi
             .createInstance({
                 did: documentId,
@@ -1162,12 +1174,29 @@ export class App extends BaseApp {
                     versionId: item.versionId,
                 },
             })
+            .then(() => {
+                this.setInProgress(false);
+            })
             .catch((reason) => {
+                this.setInProgress(false);
+
                 // TODO: Figure out why we don't get any output when it actually succeeds
                 if (reason !== 'Unexpected end of JSON input') {
                     console.log(`failed to create reason=${reason}`);
                 }
             });
+    }
+    /**
+     * Change the cursor while an operation is in progress
+     * @param cursor Cursor to change to 'progress' and 'default' are good ones
+     */
+    public setInProgress(inprogress: boolean = true) {
+        const element = document.getElementById('top');
+        if (inprogress) {
+            element.classList.add('waiting');
+        } else {
+            element.classList.remove('waiting');
+        }
     }
     /**
      * Process a single node entry
