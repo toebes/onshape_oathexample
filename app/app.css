@@ -6,7 +6,6 @@ span.defs_only {
 
 .y-overflow {
     overflow-y: scroll;
-    height:99vh
   }
  
  #top.waiting * {
@@ -18,4 +17,22 @@ span.defs_only {
   background-size: 10px 10px;
   background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
   z-index: 100;
+}
+
+#app, #top {
+  height: 100%;
+}
+
+#apptop {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#breadcrumbsx {
+  flex: 2
+}
+
+#dump {
+  flex: 1
 }

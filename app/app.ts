@@ -127,7 +127,7 @@ export class App extends BaseApp {
      */
     public startApp(): void {
         // Create the main container
-        var div = createDocumentElement('div');
+        var div = createDocumentElement('div', { id: 'apptop' });
 
         // Create the main div that shows where we are
         var bcdiv = createDocumentElement('div', {
