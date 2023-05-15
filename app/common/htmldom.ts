@@ -82,7 +82,7 @@ export function waitForTooltip(
         hideTooltip();
     };
 
-    observer.observe(elem);
+    observer.observe(elem, { childList: true });
     elem.addEventListener('mousemove', mousemovefunc, true);
     elem.addEventListener('mouseout', mouseoutfunc, true);
     let moveTimer = setTimeout(timeoutfunc, 500);

@@ -639,7 +639,7 @@ export class App extends BaseApp {
             }
 
             this.setElemText('docinfo_name', item.name);
-            this.setElemText('docinfo_desc', 'Description goes here');
+            this.setElemText('docinfo_desc', item.description ?? '');
             this.setElemText('docinfo_loc', 'LOCATION TBD');
             this.setElemText('docinfo_owner', ownedBy);
             this.setElemText('docinfo_datecreate', createddate);
@@ -754,7 +754,7 @@ export class App extends BaseApp {
         });
         modDiv.appendChild(ModifiedText);
         const lastmodSpan = createDocumentElement('span', {
-            id: 'docinfo_modifier',
+            id: 'docinfo_lastmod',
         });
         modDiv.appendChild(lastmodSpan);
         const modifierText = createDocumentElement('span', {
@@ -764,7 +764,7 @@ export class App extends BaseApp {
         modDiv.appendChild(modifierText);
         popoverBodyDiv.appendChild(modDiv);
         const dateLastMod = createDocumentElement('span', {
-            id: 'docinfo_lastmod',
+            id: 'docinfo_modifier',
         });
         popoverBodyDiv.appendChild(dateLastMod);
 
