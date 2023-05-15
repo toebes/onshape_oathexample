@@ -146,4 +146,4 @@ $result = getToken($authorization_code, $logfile);
 
 // Close the log file
 closealog();
-echo $result;
+echo json_encode($result);
