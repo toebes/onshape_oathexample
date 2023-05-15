@@ -67,7 +67,9 @@ export function waitForTooltip(
     // If they move the mouse, we simply reset the timer and wait more
     const timeoutfunc = () => {
         elem.removeEventListener('mousemove', mousemovefunc, true);
-        showTooltip();
+        if (elem.isConnected) {
+            showTooltip();
+        }
     };
     const mousemovefunc = () => {
         // cancel the timer

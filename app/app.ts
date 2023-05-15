@@ -663,7 +663,6 @@ export class App extends BaseApp {
     public hidePopup(): void {
         const popup = document.getElementById('docinfo');
         if (popup !== null) {
-            console.log('hide popup');
             popup.style.display = 'none';
         }
     }
@@ -1139,7 +1138,6 @@ export class App extends BaseApp {
                 };
             } else {
                 childContainerDiv.onclick = () => {
-                    console.log(item);
                     this.insertToTarget(
                         this.documentId,
                         this.workspaceId,
