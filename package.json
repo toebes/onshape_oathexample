@@ -1,6 +1,6 @@
 {
   "name": "oauthexample",
-  "version": "1.12.2",
+  "version": "1.12.3",
   "description": "",
   "main": "app/oauthexample.ts",
   "scripts": {
