@@ -47,3 +47,8 @@ span.defs_only {
 .popname {
   border-bottom: 1px solid black;
 }
+
+/* Temporary don't show the location in the popup until we get it working */
+.poplocdiv {
+  display:none;
+}

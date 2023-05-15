@@ -640,6 +640,7 @@ export class App extends BaseApp {
 
             this.setElemText('docinfo_name', item.name);
             this.setElemText('docinfo_desc', item.description ?? '');
+            // TODO: Reenable the div in the app.css when this gets working
             this.setElemText('docinfo_loc', 'LOCATION TBD');
             this.setElemText('docinfo_owner', ownedBy);
             this.setElemText('docinfo_datecreate', createddate);
