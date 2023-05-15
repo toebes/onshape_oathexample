@@ -387,7 +387,7 @@ export class App extends BaseApp {
 
         const titlediv = createDocumentElement('div', {
             class: 'node-title',
-            'data-original-title': title,
+            title: title,
             'data-placement': 'bottom',
             textContent: title,
         });
