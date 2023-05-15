@@ -36,3 +36,10 @@ span.defs_only {
 #dump {
   flex: 1
 }
+
+.popup {
+  display: none;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+}

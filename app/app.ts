@@ -44,7 +44,8 @@ import {
     GetInsertablesRequest,
 } from 'onshape-typescript-fetch';
 import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
-import { createDocumentElement, JTRow, JTTable } from './common/jttable';
+import { JTRow, JTTable } from './common/jttable';
+import { createDocumentElement, waitForTooltip } from './common/htmldom';
 
 export interface magicIconInfo {
     label: string;
@@ -128,6 +129,7 @@ export class App extends BaseApp {
     public startApp(): void {
         // Create the main container
         var div = createDocumentElement('div', { id: 'apptop' });
+        this.createPopupDialog(div);
 
         // Create the main div that shows where we are
         var bcdiv = createDocumentElement('div', {
@@ -387,8 +389,8 @@ export class App extends BaseApp {
             class: 'node-title',
             'data-original-title': title,
             'data-placement': 'bottom',
+            textContent: title,
         });
-        titlediv.textContent = title;
         titlediv.onclick = onclickFunction;
         div.appendChild(titlediv);
         if (!isLast) {
@@ -428,8 +430,9 @@ export class App extends BaseApp {
                     this.dumpMagic(magicid);
                 };
                 span.appendChild(icon);
-                const textspan = createDocumentElement('span');
-                textspan.textContent = magicinfo.label;
+                const textspan = createDocumentElement('span', {
+                    textContent: magicinfo.label,
+                });
                 textspan.onclick = () => {
                     this.dumpMagic(magicid);
                 };
@@ -541,8 +544,8 @@ export class App extends BaseApp {
             }
             const alink = createDocumentElement('a', {
                 class: 'os-document-display-name',
+                textContent: item.name,
             });
-            alink.textContent = item.name;
             // Document Name
             row.add({
                 celltype: 'td',
@@ -588,6 +591,19 @@ export class App extends BaseApp {
                 content: ownedBy,
             });
             const rowelem = row.generate();
+
+            rowelem.onmouseover = () => {
+                waitForTooltip(
+                    rowelem,
+                    () => {
+                        let rect = rowelem.getBoundingClientRect();
+                        this.showPopup(item, rect);
+                    },
+                    () => {
+                        this.hidePopup();
+                    }
+                );
+            };
             if (item.isContainer) {
                 rowelem.onclick = () => {
                     this.processFolder(item.id, item.name, item.treeHref);
@@ -605,7 +621,7 @@ export class App extends BaseApp {
      * already exist it will add it in the proper place.
      * @returns Table to append entries to
      */
-    public getFileListTable() {
+    public getFileListTable(): HTMLElement {
         let table = document.getElementById('glist');
         if (table === null) {
             table = new JTTable({
@@ -613,14 +629,190 @@ export class App extends BaseApp {
             }).generate();
             table.setAttribute('id', 'glist');
 
-            let appelement = document.getElementById('app');
-            // If for some reason we lost the place it is supposed to go, just append to the body
-            if (appelement === null) {
-                appelement = document.body;
-            }
+            const appelement = this.getAppElement();
             appelement.append(table);
         }
         return table;
+    }
+    /**
+     * Get the element that represents the main container for the application
+     * @returns HTMLElement for top of application
+     */
+    public getAppElement(): HTMLElement {
+        let appelement = document.getElementById('app');
+        // If for some reason we lost the place it is supposed to go, just append to the body
+        if (appelement === null) {
+            appelement = document.body;
+        }
+        return appelement;
+    }
+    /**
+     *
+     * @param item
+     */
+    public showPopup(item: BTGlobalTreeMagicNodeInfo, rect: DOMRect): void {
+        const popup = document.getElementById('docinfo');
+        if (popup !== null) {
+            console.log(item);
+            popup.style.left = String(rect.left) + 'px';
+            popup.style.top = String(rect.bottom) + 'px';
+            let modifiedby = '';
+            if (
+                item.modifiedBy !== null &&
+                item.modifiedBy !== undefined &&
+                item.modifiedBy.name !== null &&
+                item.modifiedBy.name !== undefined
+            ) {
+                modifiedby = item.modifiedBy.name;
+            }
+            let modifieddate = '';
+            if (item.modifiedAt !== null && item.modifiedAt !== undefined) {
+                modifieddate = item.modifiedAt.toLocaleString();
+            }
+            let ownedBy = '';
+            if (
+                item.owner !== null &&
+                item.owner !== undefined &&
+                item.owner.name !== null &&
+                item.owner.name !== undefined
+            ) {
+                ownedBy = item.owner.name;
+            }
+            let createddate = '';
+            if (item.createdAt !== null && item.createdAt !== undefined) {
+                createddate = item.createdAt.toLocaleString();
+            }
+
+            this.setElemText('docinfo_name', item.name);
+            this.setElemText('docinfo_desc', 'Description goes here');
+            this.setElemText('docinfo_loc', 'LOCATION TBD');
+            this.setElemText('docinfo_owner', ownedBy);
+            this.setElemText('docinfo_datecreate', createddate);
+            this.setElemText('docinfo_lastmod', modifieddate);
+            this.setElemText('docinfo_modifier', modifiedby);
+            popup.style.display = 'block';
+        }
+    }
+    /**
+     * Fill in the text content of an element
+     * @param id ID of element to update
+     * @param content Text content for element
+     */
+    setElemText(id: string, content: string) {
+        const elem = document.getElementById(id);
+        if (elem !== null) {
+            elem.textContent = content;
+        }
+    }
+    public hidePopup(): void {
+        const popup = document.getElementById('docinfo');
+        if (popup !== null) {
+            popup.style.display = 'none';
+        }
+    }
+    /**
+     * Create the popup infrastructure for the file information
+     * @param parent Place to put popup DOM element
+     */
+    public createPopupDialog(parent: HTMLElement): void {
+        ////
+        //  <div class="popover fade show bs-popover-bottom" role="tooltip" id="popover23888" x-placement="bottom" style="will-change: transform; position: absolute; transform: translate3d(521px, 2128px, 0px); top: 0px; left: 0px;">
+        //     <div class="arrow" style="left: 124px;">
+        //     </div>
+        //     <h3 class="popover-header"></h3>
+        //     <div class="popover-body">
+        //        Vivamus sagittis lacus vel augue laoreet rutrum faucibus.
+        //     </div>
+        //  </div>
+        ////
+        // <docinfo_name>
+        // <docinfo_desc>
+        // Location: <docinfo_loc>
+        // Owner: <docinfo_owner> Created <docinfo_datecreate>
+        // Modified: <docinfo_lastmod> By: <docinfo_modifier>
+        const popoverMainDiv = createDocumentElement('div', {
+            id: 'docinfo',
+            class: 'popover popup bs-popover-bottom',
+        });
+        // const arrowDiv = createDocumentElement('div', {
+        //     class: 'arrow',
+        //     style: 'left: 124px',
+        // });
+        // popoverMainDiv.appendChild(arrowDiv);
+
+        const nameDiv = createDocumentElement('h3', {
+            id: 'docinfo_name',
+            class: 'popname',
+        });
+        popoverMainDiv.appendChild(nameDiv);
+
+        const popoverBodyDiv = createDocumentElement('div', {
+            class: 'popover-body',
+        });
+        popoverMainDiv.appendChild(popoverBodyDiv);
+
+        const descDiv = createDocumentElement('div', {
+            id: 'docinfo_desc',
+            class: 'popdesc',
+        });
+        popoverBodyDiv.appendChild(descDiv);
+        const locDiv = createDocumentElement('div', { class: 'poplocdiv' });
+        const locationText = createDocumentElement('span', {
+            class: 'popttl',
+            textContent: 'Location: ',
+        });
+        locDiv.appendChild(locationText);
+        const locationDiv = createDocumentElement('span', {
+            id: 'docinfo_loc',
+            class: 'poploc',
+        });
+        locDiv.appendChild(locationDiv);
+        popoverBodyDiv.appendChild(locDiv);
+
+        const ownDiv = createDocumentElement('div', { class: 'popusergrp' });
+        const ownerText = createDocumentElement('span', {
+            class: 'popttl',
+            textContent: 'Owner: ',
+        });
+        ownDiv.appendChild(ownerText);
+        const ownerSpan = createDocumentElement('span', {
+            id: 'docinfo_owner',
+        });
+        ownDiv.appendChild(ownerSpan);
+        const createdText = createDocumentElement('span', {
+            class: 'popconj',
+            textContent: ' created ',
+        });
+        ownDiv.appendChild(createdText);
+        const dateCreated = createDocumentElement('span', {
+            id: 'docinfo_datecreate',
+        });
+        ownDiv.appendChild(dateCreated);
+
+        popoverBodyDiv.appendChild(ownDiv);
+
+        const modDiv = createDocumentElement('div', { class: 'popusergrp' });
+        const ModifiedText = createDocumentElement('span', {
+            class: 'popttl',
+            textContent: 'Modified: ',
+        });
+        modDiv.appendChild(ModifiedText);
+        const lastmodSpan = createDocumentElement('span', {
+            id: 'docinfo_modifier',
+        });
+        modDiv.appendChild(lastmodSpan);
+        const modifierText = createDocumentElement('span', {
+            class: 'popconj',
+            textContent: ' by ',
+        });
+        modDiv.appendChild(modifierText);
+        popoverBodyDiv.appendChild(modDiv);
+        const dateLastMod = createDocumentElement('span', {
+            id: 'docinfo_lastmod',
+        });
+        popoverBodyDiv.appendChild(dateLastMod);
+
+        parent.appendChild(popoverMainDiv);
     }
     /**
      * Get the elements in a document
@@ -938,8 +1130,8 @@ export class App extends BaseApp {
 
         const divParentTitle = createDocumentElement('div', {
             class: 'select-item-dialog-item-name',
+            textContent: parent.name,
         });
-        divParentTitle.textContent = parent.name;
 
         itemParentRow.append(divParentTitle);
         uiDiv.appendChild(itemTreeDiv);
@@ -968,8 +1160,8 @@ export class App extends BaseApp {
             childThumbnailDiv.append(imgChildThumbnail);
             const childNameDiv = createDocumentElement('div', {
                 class: 'select-item-dialog-item-name',
+                textContent: item.elementName,
             });
-            childNameDiv.textContent = item.elementName;
             dialogItemDiv.append(childThumbnailDiv);
             dialogItemDiv.append(childNameDiv);
             childContainerDiv.append(dialogItemDiv);
@@ -1041,8 +1233,8 @@ export class App extends BaseApp {
             divRow.append(spanOSWrapper);
             const spanLabel = createDocumentElement('span', {
                 class: 'os-param-label',
+                textContent: opt.parameterName,
             });
-            spanLabel.textContent = opt.parameterName;
             spanOSWrapper.append(spanLabel);
 
             itemParentGroup.append(divRow);
@@ -1168,8 +1360,8 @@ export class App extends BaseApp {
                     for (let enumopt of optEnum.options) {
                         const option = createDocumentElement('option', {
                             value: enumopt.option,
+                            textContent: enumopt.optionName,
                         });
-                        option.textContent = enumopt.optionName;
                         selector.append(option);
                         console.log(
                             `  ${enumopt.optionName} = ${enumopt.option}`
