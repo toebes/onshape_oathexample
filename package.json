@@ -8,12 +8,14 @@
     "build": "webpack --mode=production --env=zip=y",
     "dev": "webpack --mode=development",
     "preinstall": "npx npm-force-resolutions",
+    "deploy": "node deploy",
     "analyze": "webpack --mode=production --analyze --env=zip=y"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "filemanager-webpack-plugin": "^8.0.0",
+    "ftp-deploy": "^2.4.4",
     "raw-loader": "^4.0.2",
     "svg-sprite-html-webpack": "^2.4.1",
     "svg-url-loader": "^8.0.0",
