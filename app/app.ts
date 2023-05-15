@@ -45,7 +45,11 @@ import {
 } from 'onshape-typescript-fetch';
 import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
 import { JTTable } from './common/jttable';
-import { createDocumentElement, waitForTooltip } from './common/htmldom';
+import {
+    classListAdd,
+    createDocumentElement,
+    waitForTooltip,
+} from './common/htmldom';
 
 export interface magicIconInfo {
     label: string;
@@ -117,6 +121,7 @@ export class App extends BaseApp {
         '13': {
             icon: 'svg-icon-document-upload-cloud',
             label: 'Cloud Storage',
+            hideFromMenu: true,
         },
         '14': {
             icon: 'svg-icon-tutorial-element',
@@ -507,35 +512,44 @@ export class App extends BaseApp {
             // <td class="os-documents-thumbnail-column os-document-folder-thumbnail-column document-item"><svg class="os-svg-icon folder-list-icon"><use href="#svg-icon-folder"></use></svg></td>
             // <td class="os-document-name document-item">Visor - John Toebes</td></tr></tbody></table>
             ////
+
             let rowelem = createDocumentElement('div', {
                 class: 'document-version-item-row select-item-dialog-item-row os-selectable-item',
             });
+            let selectable = true;
+            if (itemInfo.permissionSet !== undefined) {
+                if (itemInfo.permissionSet.indexOf('LINK') === -1) {
+                    selectable = false;
+                    classListAdd(rowelem, 'select-item-disabled-item');
+                }
+            }
 
             let iconCol = createDocumentElement('div', {
                 class: 'os-thumbnail-image',
             });
-            if (item.isContainer) {
-                const svg = createSVGIcon(
-                    'svg-icon-folder',
-                    'folder-list-icon'
-                );
-                iconCol.appendChild(svg);
+            let img = undefined;
+            if (item.jsonType === 'team-summary') {
+                img = createSVGIcon('svg-icon-team', 'folder-list-icon');
+            } else if (item.isContainer) {
+                // if item is container
+                img = createSVGIcon('svg-icon-folder', 'folder-list-icon');
             } else if (item.jsonType === 'document-summary') {
                 // It has an image, so request the thumbnail to be loaded for it
-                let img = this.createThumbnailImage(itemInfo);
+                img = this.createThumbnailImage(itemInfo);
                 img.classList.add('os-thumbnail-image');
                 img.setAttribute('draggable', 'false');
                 img.setAttribute('alt', 'Thumbnail image for a document.');
                 img.ondragstart = (ev) => {
                     return false;
                 };
+            }
+            if (img !== undefined) {
                 iconCol.appendChild(img);
             }
             rowelem.appendChild(iconCol);
 
             // Document Name
             const docName = createDocumentElement('span', {
-                // class: 'os-document-display-name',
                 class: 'select-item-dialog-document-name document-version-picker-document-item',
                 textContent: item.name,
             });
@@ -558,14 +572,16 @@ export class App extends BaseApp {
                     }
                 );
             };
-            if (item.isContainer) {
-                rowelem.onclick = () => {
-                    this.processFolder(item.id, item.name, item.treeHref);
-                };
-            } else if (item.jsonType === 'document-summary') {
-                rowelem.onclick = () => {
-                    this.checkInsertItem(itemInfo);
-                };
+            if (selectable) {
+                if (item.isContainer) {
+                    rowelem.onclick = () => {
+                        this.processFolder(item.id, item.name, item.treeHref);
+                    };
+                } else if (item.jsonType === 'document-summary') {
+                    rowelem.onclick = () => {
+                        this.checkInsertItem(itemInfo);
+                    };
+                }
             }
             container.appendChild(rowelem);
         }
@@ -606,6 +622,7 @@ export class App extends BaseApp {
     public showPopup(item: BTGlobalTreeMagicNodeInfo, rect: DOMRect): void {
         const popup = document.getElementById('docinfo');
         if (popup !== null) {
+            const itemInfo = item as BTDocumentSummaryInfo;
             // TODO: Move popup above item if it doesn't fit below
             popup.style.left = String(rect.left) + 'px';
             popup.style.top = String(rect.bottom) + 'px';
@@ -637,6 +654,11 @@ export class App extends BaseApp {
             if (item.createdAt !== null && item.createdAt !== undefined) {
                 createddate = item.createdAt.toLocaleString();
             }
+            let permissions = '';
+
+            if (itemInfo.permissionSet !== undefined) {
+                permissions = '[' + itemInfo.permissionSet.join(', ') + ']';
+            }
 
             this.setElemText('docinfo_name', item.name);
             this.setElemText('docinfo_desc', item.description ?? '');
@@ -646,6 +668,7 @@ export class App extends BaseApp {
             this.setElemText('docinfo_datecreate', createddate);
             this.setElemText('docinfo_lastmod', modifieddate);
             this.setElemText('docinfo_modifier', modifiedby);
+            this.setElemText('docinfo_permissions', permissions);
             popup.style.display = 'block';
         }
     }
@@ -671,102 +694,27 @@ export class App extends BaseApp {
      * @param parent Place to put popup DOM element
      */
     public createPopupDialog(parent: HTMLElement): void {
-        ////
-        //  <div class="popover fade show bs-popover-bottom" role="tooltip" id="popover23888" x-placement="bottom" style="will-change: transform; position: absolute; transform: translate3d(521px, 2128px, 0px); top: 0px; left: 0px;">
-        //     <div class="arrow" style="left: 124px;">
-        //     </div>
-        //     <h3 class="popover-header"></h3>
-        //     <div class="popover-body">
-        //        Vivamus sagittis lacus vel augue laoreet rutrum faucibus.
-        //     </div>
-        //  </div>
-        ////
-        // <docinfo_name>
-        // <docinfo_desc>
-        // Location: <docinfo_loc>
-        // Owner: <docinfo_owner> Created <docinfo_datecreate>
-        // Modified: <docinfo_lastmod> By: <docinfo_modifier>
         const popoverMainDiv = createDocumentElement('div', {
             id: 'docinfo',
             class: 'popover popup bs-popover-bottom',
         });
-        // const arrowDiv = createDocumentElement('div', {
-        //     class: 'arrow',
-        //     style: 'left: 124px',
-        // });
-        // popoverMainDiv.appendChild(arrowDiv);
-
-        const popoverBodyDiv = createDocumentElement('div', {
-            class: 'popover-body',
-        });
-        popoverMainDiv.appendChild(popoverBodyDiv);
-
-        const nameDiv = createDocumentElement('div', {
-            id: 'docinfo_name',
-            class: 'popname',
-        });
-        popoverBodyDiv.appendChild(nameDiv);
-
-        const descDiv = createDocumentElement('div', {
-            id: 'docinfo_desc',
-            class: 'popdesc',
-        });
-        popoverBodyDiv.appendChild(descDiv);
-        const locDiv = createDocumentElement('div', { class: 'poplocdiv' });
-        const locationText = createDocumentElement('span', {
-            class: 'popttl',
-            textContent: 'Location: ',
-        });
-        locDiv.appendChild(locationText);
-        const locationDiv = createDocumentElement('span', {
-            id: 'docinfo_loc',
-            class: 'poploc',
-        });
-        locDiv.appendChild(locationDiv);
-        popoverBodyDiv.appendChild(locDiv);
-
-        const ownDiv = createDocumentElement('div', { class: 'popusergrp' });
-        const ownerText = createDocumentElement('span', {
-            class: 'popttl',
-            textContent: 'Owner: ',
-        });
-        ownDiv.appendChild(ownerText);
-        const ownerSpan = createDocumentElement('span', {
-            id: 'docinfo_owner',
-        });
-        ownDiv.appendChild(ownerSpan);
-        const createdText = createDocumentElement('span', {
-            class: 'popconj',
-            textContent: ' created ',
-        });
-        ownDiv.appendChild(createdText);
-        const dateCreated = createDocumentElement('span', {
-            id: 'docinfo_datecreate',
-        });
-        ownDiv.appendChild(dateCreated);
-
-        popoverBodyDiv.appendChild(ownDiv);
-
-        const modDiv = createDocumentElement('div', { class: 'popusergrp' });
-        const ModifiedText = createDocumentElement('span', {
-            class: 'popttl',
-            textContent: 'Modified: ',
-        });
-        modDiv.appendChild(ModifiedText);
-        const lastmodSpan = createDocumentElement('span', {
-            id: 'docinfo_lastmod',
-        });
-        modDiv.appendChild(lastmodSpan);
-        const modifierText = createDocumentElement('span', {
-            class: 'popconj',
-            textContent: ' by ',
-        });
-        modDiv.appendChild(modifierText);
-        popoverBodyDiv.appendChild(modDiv);
-        const dateLastMod = createDocumentElement('span', {
-            id: 'docinfo_modifier',
-        });
-        popoverBodyDiv.appendChild(dateLastMod);
+        popoverMainDiv.innerHTML = `<div class="popover-body">
+            <div id="docinfo_name" class="popname"></div>
+            <div id="docinfo_desc" class="popdesc"></div>
+            <div class="poplocdiv">
+               <span class="popttl">Location: </span>
+               <span id="docinfo_loc" class="poploc">LOCATION TBD</span>
+            </div>
+            <div class="popusergrp">
+               <strong>Owner:</strong> <span id="docinfo_owner"></span> created on <span id="docinfo_datecreate"></span>
+            </div>
+            <div class="popusergrp">
+               <strong>Modified:</strong> <span id="docinfo_lastmod"></span> by <span id="docinfo_modifier"></span>
+            </div>
+            <div class="poppermit">
+               <strong>Permissions:</strong> <span id="docinfo_permissions" class="popperm">LOCATION TBD</span>
+            </div>
+         </div>`;
 
         parent.appendChild(popoverMainDiv);
     }
@@ -899,10 +847,13 @@ export class App extends BaseApp {
                         (element.elementType === 'ASSEMBLY' &&
                             insertType === element.elementType)
                     ) {
-                        let elementName = element.elementName ?? '';
+                        let elementName = (
+                            element.elementName ?? ''
+                        ).toUpperCase();
 
                         if (
-                            elementName.toUpperCase().indexOf('DO NOT USE') < 0
+                            elementName.indexOf('DO NOT USE') < 0 &&
+                            elementName.indexOf('LEGACY PART') < 0
                         ) {
                             // We want to save it
                             insertMap[element.id] = element;
@@ -913,9 +864,7 @@ export class App extends BaseApp {
                         if (
                             element.parentId !== undefined &&
                             element.parentId !== null &&
-                            elementName
-                                .toUpperCase()
-                                .indexOf('DO NOT USE THESE PARTS') >= 0
+                            elementName.indexOf('DO NOT USE THESE PARTS') >= 0
                         ) {
                             dropParents[element.parentId] = true;
                         }
@@ -1645,7 +1594,26 @@ export class App extends BaseApp {
         // uri: string) {
         // Get Onshape to return the list
         this.globaltreenodesApi
-            .globalTreeNodesMagic({ mid: magic, getPathToRoot: true })
+            .globalTreeNodesMagic({
+                mid: magic,
+                getPathToRoot: true,
+                includeApplications: false,
+                includeAssemblies: true,
+                includeBlobs: false,
+                includeFSComputedPartPropertyFunctions: false,
+                includeFSTables: false,
+                includeFeatureStudios: false,
+                includeFeatures: false,
+                includeFlattenedBodies: true,
+                includePartStudios: false,
+                includeParts: true,
+                includeReferenceFeatures: false,
+                includeSketches: true,
+                includeSurfaces: true,
+                includeVariableStudios: false,
+                includeVariables: false,
+                includeWires: false,
+            })
             .then((res) => {
                 this.setBreadcrumbs(res.pathToRoot);
                 this.ProcessNodeResults(res);
