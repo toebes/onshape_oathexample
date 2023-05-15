@@ -44,7 +44,7 @@ import {
     GetInsertablesRequest,
 } from 'onshape-typescript-fetch';
 import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
-import { JTRow, JTTable } from './common/jttable';
+import { JTTable } from './common/jttable';
 import { createDocumentElement, waitForTooltip } from './common/htmldom';
 
 export interface magicIconInfo {
@@ -408,6 +408,7 @@ export class App extends BaseApp {
     public showHome() {
         // Clean up the UI so we can populate it with new entries
         let dumpNodes = document.getElementById('dump');
+        this.hidePopup();
         if (dumpNodes !== null) {
             dumpNodes.innerHTML = '';
         } else {
@@ -469,6 +470,7 @@ export class App extends BaseApp {
         }
         // Note that we are running and reset the count of entries we have gotten
         this.setRunning(true);
+        this.hidePopup();
         this.loaded = 0;
 
         // Clean up the UI so we can populate it with new entries
@@ -478,8 +480,8 @@ export class App extends BaseApp {
         } else {
             dumpNodes = document.body;
         }
-        const table = this.getFileListTable();
-        dumpNodes.appendChild(table);
+        const container = this.getFileListContainer();
+        dumpNodes.appendChild(container);
         // Start the process off with the first in the magic list
         this.processNode(magic);
     }
@@ -489,7 +491,7 @@ export class App extends BaseApp {
      */
     public appendElements(items: BTGlobalTreeMagicNodeInfo[]): void {
         // Figure out where we are to add the entries
-        let table = this.getFileListTable();
+        let container = this.getFileListContainer();
         // Iterate over all the items
         for (let item of items) {
             const itemInfo = item as BTDocumentSummaryInfo;
@@ -505,24 +507,19 @@ export class App extends BaseApp {
             // <td class="os-documents-thumbnail-column os-document-folder-thumbnail-column document-item"><svg class="os-svg-icon folder-list-icon"><use href="#svg-icon-folder"></use></svg></td>
             // <td class="os-document-name document-item">Visor - John Toebes</td></tr></tbody></table>
             ////
-            // Create a LI element to hold the entry
-            let row = new JTRow({ class: 'os-item-row os-document-in-list' });
+            let rowelem = createDocumentElement('div', {
+                class: 'document-version-item-row select-item-dialog-item-row os-selectable-item',
+            });
+
+            let iconCol = createDocumentElement('div', {
+                class: 'os-thumbnail-image',
+            });
             if (item.isContainer) {
                 const svg = createSVGIcon(
                     'svg-icon-folder',
                     'folder-list-icon'
                 );
-                row.add({
-                    celltype: 'td',
-                    settings: {
-                        class: 'os-documents-thumbnail-column os-document-folder-thumbnail-column document-item',
-                    },
-                    content: svg,
-                });
-                // } else if (
-                //     item.thumbnail !== undefined &&
-                //     item.thumbnail.href !== undefined
-                // ){
+                iconCol.appendChild(svg);
             } else if (item.jsonType === 'document-summary') {
                 // It has an image, so request the thumbnail to be loaded for it
                 let img = this.createThumbnailImage(itemInfo);
@@ -532,65 +529,22 @@ export class App extends BaseApp {
                 img.ondragstart = (ev) => {
                     return false;
                 };
-                row.add({
-                    celltype: 'td',
-                    settings: {
-                        class: 'os-documents-thumbnail-column document-item',
-                    },
-                    content: img,
-                });
-            } else {
-                row.add('');
+                iconCol.appendChild(img);
             }
-            const alink = createDocumentElement('a', {
-                class: 'os-document-display-name',
+            rowelem.appendChild(iconCol);
+
+            // Document Name
+            const docName = createDocumentElement('span', {
+                // class: 'os-document-display-name',
+                class: 'select-item-dialog-document-name document-version-picker-document-item',
                 textContent: item.name,
             });
-            // Document Name
-            row.add({
-                celltype: 'td',
-                settings: { class: 'os-document-name document-item' },
-                content: alink,
+
+            let textCol = createDocumentElement('div', {
+                class: 'select-item-dialog-document-name-box os-col',
             });
-            // Modified
-            row.add({
-                celltype: 'td',
-                settings: { class: 'os-item-modified-date document-item' },
-                content: item.modifiedAt.toLocaleTimeString(),
-            });
-            // Modified By
-            let modifiedby = '';
-            if (
-                item.modifiedBy !== null &&
-                item.modifiedBy !== undefined &&
-                item.modifiedBy.name !== null &&
-                item.modifiedBy.name !== undefined
-            ) {
-                modifiedby = item.modifiedBy.name;
-            }
-            row.add({
-                celltype: 'td',
-                settings: {
-                    class: 'os-item-modified-by os-with-owned-by document-item',
-                },
-                content: modifiedby,
-            });
-            // Owned By
-            let ownedBy = '';
-            if (
-                item.owner !== null &&
-                item.owner !== undefined &&
-                item.owner.name !== null &&
-                item.owner.name !== undefined
-            ) {
-                ownedBy = item.owner.name;
-            }
-            row.add({
-                celltype: 'td',
-                settings: { class: 'os-item-owned-by document-item' },
-                content: ownedBy,
-            });
-            const rowelem = row.generate();
+            textCol.appendChild(docName);
+            rowelem.appendChild(textCol);
 
             rowelem.onmouseover = () => {
                 waitForTooltip(
@@ -613,26 +567,25 @@ export class App extends BaseApp {
                     this.checkInsertItem(itemInfo);
                 };
             }
-            table.appendChild(rowelem);
+            container.appendChild(rowelem);
         }
     }
     /**
-     * Finds the documents table to append entries to.  If one doesn't
+     * Finds the documents container to append entries to.  If one doesn't
      * already exist it will add it in the proper place.
      * @returns Table to append entries to
      */
-    public getFileListTable(): HTMLElement {
-        let table = document.getElementById('glist');
-        if (table === null) {
-            table = new JTTable({
-                class: 'os-documents-listx os-items-table full-width',
-            }).generate();
-            table.setAttribute('id', 'glist');
-
+    public getFileListContainer(): HTMLElement {
+        let container = document.getElementById('glist');
+        if (container === null) {
+            container = createDocumentElement('div', {
+                class: 'os-documents-list full-width document-version-picker-section document-version-picker-document-list select-item-dialog-subdialog-content',
+                id: 'glist',
+            });
             const appelement = this.getAppElement();
-            appelement.append(table);
+            appelement.append(container);
         }
-        return table;
+        return container;
     }
     /**
      * Get the element that represents the main container for the application
@@ -653,9 +606,11 @@ export class App extends BaseApp {
     public showPopup(item: BTGlobalTreeMagicNodeInfo, rect: DOMRect): void {
         const popup = document.getElementById('docinfo');
         if (popup !== null) {
-            console.log(item);
+            // TODO: Move popup above item if it doesn't fit below
             popup.style.left = String(rect.left) + 'px';
             popup.style.top = String(rect.bottom) + 'px';
+            popup.style.width = String(rect.width) + 'px';
+            popup.style.maxWidth = String(rect.width) + 'px';
             let modifiedby = '';
             if (
                 item.modifiedBy !== null &&
@@ -707,6 +662,7 @@ export class App extends BaseApp {
     public hidePopup(): void {
         const popup = document.getElementById('docinfo');
         if (popup !== null) {
+            console.log('hide popup');
             popup.style.display = 'none';
         }
     }
@@ -740,16 +696,16 @@ export class App extends BaseApp {
         // });
         // popoverMainDiv.appendChild(arrowDiv);
 
-        const nameDiv = createDocumentElement('h3', {
-            id: 'docinfo_name',
-            class: 'popname',
-        });
-        popoverMainDiv.appendChild(nameDiv);
-
         const popoverBodyDiv = createDocumentElement('div', {
             class: 'popover-body',
         });
         popoverMainDiv.appendChild(popoverBodyDiv);
+
+        const nameDiv = createDocumentElement('div', {
+            id: 'docinfo_name',
+            class: 'popname',
+        });
+        popoverBodyDiv.appendChild(nameDiv);
 
         const descDiv = createDocumentElement('div', {
             id: 'docinfo_desc',
@@ -1010,6 +966,7 @@ export class App extends BaseApp {
      * @param item Item to check
      */
     public checkInsertItem(item: BTDocumentSummaryInfo): void {
+        this.hidePopup();
         this.getInsertChoices(
             item,
             this.targetDocumentElementInfo.elementType
@@ -1718,15 +1675,17 @@ export class App extends BaseApp {
             // end of the list.  When it becomes visible because they scrolled down or because there
             // is more room on the screen, we will delete that Loading More element and then process
             // the next set of entries
-            const table = this.getFileListTable();
-            const moreRow = new JTRow({ class: 'os-item-row' });
-            moreRow.add({
-                celltype: 'td',
-                colspan: 5,
+            const container = this.getFileListContainer();
+            let rowelem = createDocumentElement('div', {
+                class: 'document-version-item-row select-item-dialog-item-row os-selectable-item',
+            });
+
+            let textCol = createDocumentElement('div', {
+                class: 'select-item-dialog-document-name-box os-col',
                 content: 'Loading More...',
             });
-            const rowelem = moreRow.generate();
-            table.appendChild(rowelem);
+            rowelem.appendChild(textCol);
+            container.appendChild(rowelem);
             // When the Loading More... becomes visible on the screen, we can load the next element
             const observer = new IntersectionObserver(
                 (entry) => {
@@ -1760,6 +1719,8 @@ export class App extends BaseApp {
     public processFolder(id: string, _name: string, treeHref: string): void {
         // If we are in the process of running, we don't want to start things over again
         // so just ignore the call here
+        this.hidePopup();
+
         if (this.running) {
             return;
         }
@@ -1774,8 +1735,8 @@ export class App extends BaseApp {
         } else {
             dumpNodes = document.body;
         }
-        const table = this.getFileListTable();
-        dumpNodes.appendChild(table);
+        const container = this.getFileListContainer();
+        dumpNodes.appendChild(container);
 
         if (
             treeHref !== undefined &&

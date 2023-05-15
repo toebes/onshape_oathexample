@@ -43,7 +43,7 @@ import {
     InsertableApi,
     BTDocumentSummaryInfo,
 } from 'onshape-typescript-fetch';
-import { createDocumentElement } from './common/jttable';
+import { createDocumentElement } from './common/htmldom';
 
 // Optional parameters when creating a thumbnail
 type createThumbnailOptions = {

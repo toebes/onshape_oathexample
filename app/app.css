@@ -43,3 +43,7 @@ span.defs_only {
   top: 0px;
   left: 0px;
 }
+
+.popname {
+  border-bottom: 1px solid black;
+}

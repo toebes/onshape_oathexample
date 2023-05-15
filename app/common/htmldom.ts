@@ -60,22 +60,29 @@ export function waitForTooltip(
     showTooltip: () => void,
     hideTooltip: () => void
 ) {
+    const observer = new MutationObserver(() => {
+        mouseoutfunc();
+    });
+
     // If they move the mouse, we simply reset the timer and wait more
     const timeoutfunc = () => {
-        showTooltip();
         elem.removeEventListener('mousemove', mousemovefunc, true);
+        showTooltip();
     };
     const mousemovefunc = () => {
-        clearTimeout(moveTimer);
         // cancel the timer
+        clearTimeout(moveTimer);
         moveTimer = setTimeout(timeoutfunc, 500);
     };
     const mouseoutfunc = () => {
-        clearTimeout(moveTimer);
-        hideTooltip();
+        observer.disconnect();
         elem.removeEventListener('mouseout', mouseoutfunc, true);
         elem.removeEventListener('mousemove', mousemovefunc, true);
+        clearTimeout(moveTimer);
+        hideTooltip();
     };
+
+    observer.observe(elem);
     elem.addEventListener('mousemove', mousemovefunc, true);
     elem.addEventListener('mouseout', mouseoutfunc, true);
     let moveTimer = setTimeout(timeoutfunc, 500);
