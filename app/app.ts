@@ -396,9 +396,7 @@ export class App extends BaseApp {
                     teamroot.name,
                     isLast,
                     () => {
-                        () => {
-                            this.processFolder(teamroot, teamroot);
-                        };
+                        this.processFolder(teamroot, teamroot);
                     }
                 );
                 breadcrumbsdiv.appendChild(teamrootdiv);
