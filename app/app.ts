@@ -151,7 +151,7 @@ export class App extends BaseApp {
         div.appendChild(dumpNodes);
 
         this.setAppElements(div);
-        this.setBreadcrumbs([]);
+        this.setBreadcrumbs([], undefined);
 
         this.getDocumentElementInfo(
             this.documentId,
@@ -194,8 +194,12 @@ export class App extends BaseApp {
     /**
      * Set the breadcrumbs in the header
      * @param breadcrumbs Array of breadcrumbs (in reverse order)
+     * @param teamroot Preserved team root so that we know when we are processing a folder under a team
      */
-    public setBreadcrumbs(breadcrumbs: BTGlobalTreeNodeInfo[]): void {
+    public setBreadcrumbs(
+        breadcrumbs: BTGlobalTreeNodeInfo[],
+        teamroot: BTGlobalTreeNodeInfo
+    ): void {
         // Find where they want us to put the breadcrumbs
         const breadcrumbscontainer = document.getElementById('breadcrumbs');
         if (
@@ -320,20 +324,36 @@ export class App extends BaseApp {
                 }
             )
         );
+        // Keep track of when we we need to override the next folder entry with the team icon
+        let useteamicon = false;
         for (let i = breadcrumbs.length - 1; i >= 0; i--) {
             const node = breadcrumbs[i];
 
             let breadcrumbdiv: HTMLElement;
             const isLast = i == 0;
+            // Assume we won't have to insert the fake team root into the breadcrumb list
+            let addteamroot = false;
             if (node.resourceType === 'magic') {
                 // This is one of the magic entries.
-                let magicinfo = this.magicInfo[node.id];
+                let nodeid = node.id;
+                let nodename = node.name;
+                // When we are dealing with a team, the path to root doesn't tell you that
+                // it is part of a team and instead says it is a shared folder.
+                // So what we need to do in this case is to insert a magic
+                if (nodeid === '12' && teamroot !== undefined) {
+                    // 12 is "Shared with me"
+                    nodeid = '11'; // 11 is Teams
+                    nodename = this.magicInfo[nodeid].label;
+                    addteamroot = true;
+                    useteamicon = true;
+                }
+                let magicinfo = this.magicInfo[nodeid];
                 if (magicinfo === undefined || magicinfo === null) {
                     // But we don't recognize which magic it is, so
                     breadcrumbdiv = this.createBreadcrumbNode(
                         'svg-icon-error',
                         `${node.id} - NOT FOUND (${node.name})`,
-                        isLast,
+                        isLast && !addteamroot,
                         () => {
                             this.showHome();
                         }
@@ -343,26 +363,47 @@ export class App extends BaseApp {
                     // And make it so that when they click they go to the right directory
                     breadcrumbdiv = this.createBreadcrumbNode(
                         magicinfo.icon,
-                        node.name,
-                        isLast,
+                        nodename,
+                        isLast && !addteamroot,
                         () => {
-                            this.dumpMagic(node.id);
+                            this.dumpMagic(nodeid);
                         }
                     );
                 }
             } else {
                 // Just a normal folder.  make it so that clicking on it
-                // navigates to the folder.
+                // navigates to the folder.  However we need to remember
+                // that just because it is a folder, doesn't mean it wasn't shared with a team
+                let icon: OnshapeSVGIcon = 'svg-icon-folder';
+                if (useteamicon || node.resourceType === 'team') {
+                    icon = 'svg-icon-team';
+                    useteamicon = false;
+                }
                 breadcrumbdiv = this.createBreadcrumbNode(
-                    'svg-icon-folder',
+                    icon,
                     node.name,
                     isLast,
                     () => {
-                        this.processFolder(node.id, node.name, node.treeHref);
+                        this.processFolder(node, teamroot);
                     }
                 );
             }
             breadcrumbsdiv.appendChild(breadcrumbdiv);
+            // Did we need to put in the fake team root that was missed in the breadcrumb list?
+            if (addteamroot) {
+                let teamrootdiv = this.createBreadcrumbNode(
+                    'svg-icon-team',
+                    teamroot.name,
+                    isLast,
+                    () => {
+                        () => {
+                            this.processFolder(teamroot, teamroot);
+                        };
+                    }
+                );
+                breadcrumbsdiv.appendChild(teamrootdiv);
+                useteamicon = false;
+            }
         }
         breadcrumbscontainer.replaceChildren(breadcrumbsdiv);
     }
@@ -447,7 +488,7 @@ export class App extends BaseApp {
             }
         }
         dumpNodes.appendChild(table.generate());
-        this.setBreadcrumbs([]);
+        this.setBreadcrumbs([], undefined);
     }
     /**
      * Mark the UI as running.  We disable the dropdown so that you can't request
@@ -488,13 +529,17 @@ export class App extends BaseApp {
         const container = this.getFileListContainer();
         dumpNodes.appendChild(container);
         // Start the process off with the first in the magic list
-        this.processNode(magic);
+        this.processMagicNode(magic);
     }
     /**
      * Append a dump of elements to the current UI
      * @param items Items to append
+     * @param teamroot Preserved team root so that we know when we are processing a folder under a team
      */
-    public appendElements(items: BTGlobalTreeMagicNodeInfo[]): void {
+    public appendElements(
+        items: BTGlobalTreeMagicNodeInfo[],
+        teamroot: BTGlobalTreeNodeInfo
+    ): void {
         // Figure out where we are to add the entries
         let container = this.getFileListContainer();
         // Iterate over all the items
@@ -575,7 +620,7 @@ export class App extends BaseApp {
             if (selectable) {
                 if (item.isContainer) {
                     rowelem.onclick = () => {
-                        this.processFolder(item.id, item.name, item.treeHref);
+                        this.processFolder(item, teamroot);
                     };
                 } else if (item.jsonType === 'document-summary') {
                     rowelem.onclick = () => {
@@ -1590,7 +1635,7 @@ export class App extends BaseApp {
      * Process a single node entry
      * @param uri URI node for the entries to be loaded
      */
-    public processNode(magic: string) {
+    public processMagicNode(magic: string) {
         // uri: string) {
         // Get Onshape to return the list
         this.globaltreenodesApi
@@ -1615,8 +1660,8 @@ export class App extends BaseApp {
                 includeWires: false,
             })
             .then((res) => {
-                this.setBreadcrumbs(res.pathToRoot);
-                this.ProcessNodeResults(res);
+                this.setBreadcrumbs(res.pathToRoot, undefined);
+                this.ProcessNodeResults(res, undefined);
             })
             .catch((err) => {
                 // Something went wrong, some mark us as no longer running.
@@ -1625,17 +1670,21 @@ export class App extends BaseApp {
             });
     }
     /**
-     *
-     * @param res
+     * Dump out all the elements that were returned from Onshape
+     * @param info Node entry to be processed
+     * @param teamroot TreeNode information for a team root if this folder came from a team
      */
-    public ProcessNodeResults(res: BTGlobalTreeNodesInfo) {
-        const nodes = res as BTGlobalTreeNodesInfo;
+    public ProcessNodeResults(
+        info: BTGlobalTreeNodesInfo,
+        teamroot: BTGlobalTreeNodeInfo
+    ) {
+        const nodes = info as BTGlobalTreeNodesInfo;
         // When it does, append all the elements to the UI
-        this.appendElements(nodes.items);
+        this.appendElements(nodes.items, teamroot);
         // Do we have any more in the list and are we under the limit for the UI
         if (
-            res.next !== '' &&
-            res.next !== undefined &&
+            info.next !== '' &&
+            info.next !== undefined &&
             this.loaded < this.loadedlimit
         ) {
             // We have more entries, so lets put a little "Loading More..." element at the
@@ -1662,12 +1711,10 @@ export class App extends BaseApp {
                         // Request the UI to jump to the next entry in the list.
                         this.setRunning(true);
                         this.OnshapeRequest(
-                            res.next,
+                            info.next,
                             BTGlobalTreeNodesInfoFromJSON
-                        ).then((res) => {
-                            this.ProcessNodeResults(
-                                res as BTGlobalTreeNodesInfo
-                            );
+                        ).then((res: BTGlobalTreeNodesInfo) => {
+                            this.ProcessNodeResults(res, teamroot);
                         });
                     }
                 },
@@ -1679,11 +1726,15 @@ export class App extends BaseApp {
     }
     /**
      * Navigate into a folder and populate the UI with the contents
-     * @param id Id of folder
-     * @param _name Name of folder (not currently used, may be deleted)
-     * @param treeHref Optional href to access folder contents
+     * @param item Entry to be processed
+     * @param teamroot Preserved team root so that we know when we are processing a folder under a team
+     *
      */
-    public processFolder(id: string, _name: string, treeHref: string): void {
+    public processFolder(
+        item: BTGlobalTreeNodeInfo,
+        teamroot: BTGlobalTreeNodeInfo
+    ): void {
+        // id: string, _name: string, treeHref: string): void {
         // If we are in the process of running, we don't want to start things over again
         // so just ignore the call here
         this.hidePopup();
@@ -1704,17 +1755,10 @@ export class App extends BaseApp {
         }
         const container = this.getFileListContainer();
         dumpNodes.appendChild(container);
-
-        if (
-            treeHref !== undefined &&
-            treeHref !== '' &&
-            treeHref.indexOf('/team/') >= 0
-        ) {
-            // If we have /team/ in the href then
-            // if (treeHref !== undefined && treeHref !== '') {
+        if (item.jsonType === 'team-summary') {
             this.globaltreenodesApi
                 .globalTreeNodesTeamInsertables({
-                    teamId: id,
+                    teamId: item.id,
                     getPathToRoot: true,
                     includeAssemblies: true,
                     includeFlattenedBodies: true,
@@ -1722,13 +1766,9 @@ export class App extends BaseApp {
                     includeSketches: false,
                     includeSurfaces: false,
                 })
-                // this.OnshapeRequest(
-                //     treeHref + '?getPathToRoot=true',
-                //     BTGlobalTreeNodesInfoFromJSON
-                // )
                 .then((res) => {
-                    this.setBreadcrumbs(res.pathToRoot);
-                    this.ProcessNodeResults(res);
+                    this.setBreadcrumbs(res.pathToRoot, item);
+                    this.ProcessNodeResults(res, item);
                 })
                 .catch((err) => {
                     // Something went wrong, some mark us as no longer running.
@@ -1738,7 +1778,7 @@ export class App extends BaseApp {
         } else {
             this.globaltreenodesApi
                 .globalTreeNodesFolderInsertables({
-                    fid: id,
+                    fid: item.id,
                     getPathToRoot: true,
                     includeAssemblies: true,
                     includeFlattenedBodies: true,
@@ -1746,10 +1786,9 @@ export class App extends BaseApp {
                     includeSketches: false,
                     includeSurfaces: false,
                 })
-                //                .globalTreeNodesFolder({ fid: id, getPathToRoot: true })
                 .then((res) => {
-                    this.setBreadcrumbs(res.pathToRoot);
-                    this.ProcessNodeResults(res);
+                    this.setBreadcrumbs(res.pathToRoot, teamroot);
+                    this.ProcessNodeResults(res, teamroot);
                 })
                 .catch((err) => {
                     // Something went wrong, some mark us as no longer running.
