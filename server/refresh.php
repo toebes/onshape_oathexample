@@ -105,7 +105,7 @@ function getToken($code)
   }
   // We got a response, so parse out the JSON
   $response = json_decode($response, true);
-  oalog('JSON: ' . print_r($response) . "\n");
+  oalog('JSON: ' . print_r($response, true) . "\n");
 
   // See if we got the access_token to return.
   if (array_key_exists("access_token", $response)) {
