@@ -53,6 +53,18 @@ function oalog($logstr) {
     fwrite($logfile, $logstr);
   }
 }
+
+function getPost() {
+    if(!empty($_POST)) {
+        // when using application/x-www-form-urlencoded or multipart/form-data as the HTTP Content-Type in the request
+        // NOTE: if this is the case and $_POST is empty, check the variables_order in php.ini! - it must contain the letter P
+        return $_POST;
+    }
+
+    // when using application/json as the HTTP Content-Type in the request 
+    return file_get_contents('php://input');
+}
+
 // Open any log file if needed
 openalog();
 
@@ -106,6 +118,12 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 curl_setopt($ch, CURLINFO_HEADER_OUT, true);
 curl_setopt($ch, CURLINFO_HEADER, true);
 
+if ($method == "POST") {
+    $postData = getPost();
+    oalog("POSTDATA:\n $postData\n");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+}
 // Make the request
 $response = curl_exec($ch);
 $err = curl_error($ch);
@@ -128,7 +146,7 @@ oalog("RESPONSE:\n".$out."\nERR: ".$err."\n");
 
 // Log all the information about the request/response
 $info = curl_getinfo($ch);
-oalog("INFO:\n".print_r($info, TRUE));
+oalog("INFO:\n".print_r($info, true));
 
 curl_close($ch);
 
