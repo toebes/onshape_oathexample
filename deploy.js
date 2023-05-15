@@ -15,7 +15,7 @@ const config = {
     // e.g. exclude sourcemaps, and ALL files in node_modules (including dot files)
     exclude: ['example_config.php'],
     // delete ALL existing files at destination before uploading, if true
-    deleteRemote: false,
+    deleteRemote: settings.deleteRemote,
     // Passive mode is forced (EPSV command is not sent)
     forcePasv: true,
     // use sftp or ftp
