@@ -28,30 +28,7 @@
 
 'use strict';
 
-import { ExchangeToken, IExchangeToken, RefreshToken } from './oauth';
-import * as runtime from 'onshape-typescript-fetch/runtime';
-import { URLApi } from './urlapi';
-import {
-    GlobalTreeNodesApi,
-    MetadataApi,
-    ElementApi,
-    DocumentApi,
-    PartApi,
-    PartStudioApi,
-    AssemblyApi,
-    ThumbnailApi,
-    InsertableApi,
-    BTDocumentSummaryInfo,
-} from 'onshape-typescript-fetch';
-import { createDocumentElement } from './common/htmldom';
-
-// Optional parameters when creating a thumbnail
-type createThumbnailOptions = {
-    width?: number;
-    height?: number;
-    retry?: boolean;
-    retryInterval?: number;
-};
+import { onshapeConfig, OnshapeAPI } from './onshapeapi';
 
 /**
  * BaseApp contains all the support routines that your application will need.
@@ -60,34 +37,12 @@ type createThumbnailOptions = {
  */
 
 export class BaseApp {
-    /**
-     * main.ts is the main entry point for running all the typescript client code
-     */
     public documentId = '';
     public workspaceId = '';
     public elementId = '';
     public server = 'https://cad.onshape.com';
-    public baseserver = '';
-    public userId = '';
-    public clientId = '';
-    public companyId = '';
-    public code = '';
     public myserver = ''; // Fill in with your server
-    public access_token: string;
-    public refresh_token: string;
-    public expires_token: Date;
-
-    public globaltreenodesApi: GlobalTreeNodesApi;
-    public medadataApi: MetadataApi;
-    public elementApi: ElementApi;
-    public documentApi: DocumentApi;
-    public assemblyApi: AssemblyApi;
-    public partstudioApi: PartStudioApi;
-    public thumbnailApi: ThumbnailApi;
-    public insertableApi: InsertableApi;
-    public partApi: PartApi;
-    public urlAPI: URLApi;
-    public configuration: runtime.Configuration;
+    public onshape: OnshapeAPI;
 
     /**
      * Handle any post messages sent to us
@@ -99,155 +54,21 @@ export class BaseApp {
 
         // Verify the origin matches the server iframe src query parameter
         if (this.server === e.origin) {
-            console.log(
-                "Message safe and can be handled as it is from origin '" +
-                    e.origin +
-                    "', which matches server query parameter '" +
-                    this.server +
-                    "'."
-            );
+            // console.log(
+            //     "Message safe and can be handled as it is from origin '" +
+            //         e.origin +
+            //         "', which matches server query parameter '" +
+            //         this.server +
+            //         "'."
+            // );
             if (e.data && e.data.messageName) {
                 console.log("Message name = '" + e.data.messageName + "'");
             } else {
-                console.log('Message name not found. Ignoring message.');
+                // console.log('Message name not found. Ignoring message.');
             }
         } else {
-            console.log('Message NOT safe and should be ignored.');
+            // console.log('Message NOT safe and should be ignored.');
         }
-    }
-    /**
-     * Get a thumbnail for an Onshape hosted image
-     * This addresses the issue where we want to do <img src="https://cad.onshape.com/...">
-     * But it can't be displayed by the browser because we don't have the Bearer token on the request
-     * This will effectively be a lazy load, populating the image when it becomes available
-     * @param url URL of image to retrieve
-     * @returns base 64 image data string
-     */
-    public getOnshapeThumbnail(urlReq: string): Promise<string> {
-        return new Promise((resolve, reject) => {
-            let xhr = new XMLHttpRequest();
-
-            const url = this.myserver + this.fixOnshapeURI(urlReq);
-            xhr.open('GET', url, true);
-            xhr.setRequestHeader(
-                'Authorization',
-                'Bearer ' + this.access_token
-            );
-            xhr.setRequestHeader('X-Server', this.server);
-            xhr.setRequestHeader(
-                'Accept',
-                'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
-            );
-            // We want to get a blob so that it isn't UTF-8 encoded along the way
-            xhr.responseType = 'blob';
-
-            xhr.onreadystatechange = () => {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200) {
-                        if (
-                            xhr.response.size === 0 ||
-                            xhr.response.type === 'text/xml'
-                        ) {
-                            reject('Not Found');
-                        } else {
-                            // Parse out the downloaded image into a data URL (this automatically base64 encodes it)
-                            var reader = new FileReader();
-                            reader.readAsDataURL(xhr.response);
-                            reader.onloadend = function () {
-                                resolve(reader.result.toString());
-                            };
-                        }
-                    } else {
-                        reject(xhr.responseText);
-                    }
-                }
-            };
-            xhr.send();
-        });
-    }
-    /**
-     *
-     * @param item Onshape element to display thumbnail for
-     * @param options Options to control the display
-     *                height (default 40) is height of the image to request
-     *                width (default 70) is the width of the image to request
-     *                retry indicates that we should retry the image if it isn't found
-     *                retryInterval (default 2) is how frequently in seconds we should retry to get the image
-     * @returns HTMLElement of the image dom element
-     */
-    public createThumbnailImage(
-        item: BTDocumentSummaryInfo,
-        options?: createThumbnailOptions
-    ): HTMLElement {
-        let { height = 40, width = 70, retry = false, retryInterval = 1 } = {};
-        const targetsize = `${width}x${height}`;
-        let verPart = '';
-        if (
-            item.recentVersion !== undefined &&
-            item.recentVersion !== null &&
-            item.recentVersion.id !== undefined &&
-            item.recentVersion.id !== null
-        ) {
-            verPart = `/v/${item.recentVersion.id}`;
-        }
-        let imageURL = `${this.myserver}/api/thumbnails/d/${item.id}${verPart}/s/${width}x${height}`;
-        if (item.thumbnail !== undefined && item.thumbnail !== null) {
-            // We have a potential thumbnail URI we can work from
-            // See if we can find a URI that matches
-            for (let thumbnailInfo of item.thumbnail.sizes) {
-                if (
-                    thumbnailInfo.size === targetsize &&
-                    thumbnailInfo.href !== undefined &&
-                    thumbnailInfo.href !== null
-                ) {
-                    imageURL = thumbnailInfo.href;
-                    break;
-                }
-            }
-        }
-        const imgChildThumbnail = createDocumentElement('img', {
-            src: 'https://cad.onshape.com/images/default-document.png',
-            width: String(width),
-            height: String(height),
-        });
-
-        this.getOnshapeThumbnail(imageURL)
-            .then((src) => {
-                imgChildThumbnail.setAttribute('src', src);
-            })
-            .catch((err) => {
-                if (retry) {
-                    setTimeout(() => {
-                        // TODO: Figure out how to cleanly rerun the operation without getting heavily recursive.
-                    }, 1000 * retryInterval);
-                }
-            });
-        return imgChildThumbnail;
-    }
-
-    /**
-     * Request refreshing the token because it has expired
-     */
-    public refreshtoken(): void {
-        // set clientId
-        let xhr = new XMLHttpRequest();
-        let url = this.myserver + '/refresh.php?code=' + this.clientId;
-        xhr.open('GET', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4 && xhr.status === 200) {
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(
-                    xhr.responseText,
-                    'text/xml'
-                );
-
-                console.log('*** REFRESHED TOKEN');
-                console.log(xmlDoc);
-            }
-        };
-        xhr.send();
     }
     /**
      * Replace the main app elements.  Note if there is no app div, the elements are appended to the main body so that they aren't lost
@@ -271,162 +92,19 @@ export class BaseApp {
         this.setAppElements(h2);
     }
     /**
-     * Get the current access token (refreshing it if it has expired)
-     * @returns Promise to the access token
-     */
-    public getAccessToken(): Promise<string> {
-        return new Promise<string>((resolve, reject) => {
-            const now = new Date();
-            if (now >= this.expires_token) {
-                RefreshToken(this.myserver + '/refresh.php', this.refresh_token)
-                    .then((v: IExchangeToken) => {
-                        const now = new Date();
-
-                        // We have successfully refreshed the token so let the app continue
-                        this.access_token = v.access_token;
-                        this.refresh_token = v.refresh_token;
-                        this.expires_token = new Date(
-                            now.getTime() + v.expires_in * 1000
-                        );
-
-                        resolve('Bearer ' + this.access_token);
-                    })
-                    .catch((reason: string) => {
-                        // Something went wrong, so let the user know
-                        this.failApp(reason);
-                    });
-            } else {
-                resolve('Bearer ' + this.access_token);
-            }
-        });
-    }
-    /**
-     *
-     * @param uri URI returned from Onshape
-     * @returns Cleaned up URI that can be passed to
-     */
-    public fixOnshapeURI(uri: string): string {
-        if (uri === undefined || uri === null) {
-            return '';
-        }
-        const apipos = uri.indexOf('/api/');
-        if (apipos >= 0) {
-            uri = uri.substring(apipos);
-        }
-        return uri;
-    }
-    /**
-     * Call a generic URL returned from an Onshape response and transform it to the correct type
-     * @param url Url to call
-     * @param infoFromJSON Transformation function pointer that takes a JSON result and converts it to the right type
-     * @param method  'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'HEAD' Default='GET'
-     * @param initOverrides Any overrides specific to this one request
-     * @returns A promise that will return the result of the call
-     */
-    public async OnshapeRequest(
-        url: string,
-        infoFromJSON: (json: any) => any,
-        method: runtime.HTTPMethod = 'GET',
-        initOverrides?: RequestInit | runtime.InitOverrideFunction
-    ): Promise<any> {
-        // console.log(`***Onshape Request ${url}`);
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        if (this.configuration && this.configuration.accessToken) {
-            // oauth required
-            headerParameters['Authorization'] =
-                await this.configuration.accessToken('OAuth2', ['OAuth2Read']);
-        }
-
-        if (
-            this.configuration &&
-            (this.configuration.username !== undefined ||
-                this.configuration.password !== undefined)
-        ) {
-            headerParameters['Authorization'] =
-                'Basic ' +
-                btoa(
-                    this.configuration.username +
-                        ':' +
-                        this.configuration.password
-                );
-        }
-
-        const response = await this.urlAPI.request({
-            path: this.fixOnshapeURI(url),
-            method: method,
-            headers: headerParameters,
-            query: {},
-        });
-
-        const result = new runtime.JSONApiResponse(response, (jsonValue) =>
-            infoFromJSON(jsonValue)
-        );
-        return await result.value();
-    }
-
-    /**
      * Initialize the app because we have gotten permission from Onshape to access content
      * @param access_token Access token returned by Onshape
      * @param refresh_token Refresh token needed if the Access Token has to be refreshed
      * @param expires Time when the token expires and needs to be updated
      */
-    public initApp(access_token: string, refresh_token: string, expires: Date) {
-        // We want to strip off everything before the /api/
-        const apipos = runtime.BASE_PATH.lastIndexOf('/api/');
-        this.baseserver = runtime.BASE_PATH.substring(0, apipos);
-        const apipart = runtime.BASE_PATH.substring(apipos);
-        // No trailing slash on the target server
-        const myserver = this.myserver.replace(/\/+$/, '');
-
-        this.access_token = access_token;
-        this.refresh_token = refresh_token;
-        this.expires_token = expires;
-        const uriconfigparams: runtime.ConfigurationParameters = {
-            basePath: myserver, // override base path
-            accessToken: (
-                name?: string,
-                scopes?: string[]
-            ): Promise<string> => {
-                return this.getAccessToken();
-            },
-            headers: { 'X-Server': this.server },
-            //header params we want to use on every request
-        };
-        //
-        // For the URLs that get returned from Onshape APIs, we need to
-        // be able to clean them up and send them to our Lambda.  Since they
-        // are likely to have the right /api/ prefix (or /api/v5) we want to
-        // take them as is and pass it straight to the server.
-        //
-        const urlConfiguration = new runtime.Configuration(uriconfigparams);
-
-        this.urlAPI = new URLApi(urlConfiguration);
-
-        // For the other standard apis, we need to include the /api/ prefix
-        const configparams = { ...uriconfigparams };
-        configparams.basePath = myserver + apipart;
-
-        // Initialize all the APIs that we need to support
-        this.configuration = new runtime.Configuration(configparams);
-        this.globaltreenodesApi = new GlobalTreeNodesApi(this.configuration);
-        this.medadataApi = new MetadataApi(this.configuration);
-        this.elementApi = new ElementApi(this.configuration);
-        this.thumbnailApi = new ThumbnailApi(this.configuration);
-        this.insertableApi = new InsertableApi(this.configuration);
-        this.documentApi = new DocumentApi(this.configuration);
-        this.assemblyApi = new AssemblyApi(this.configuration);
-        this.partstudioApi = new PartStudioApi(this.configuration);
-        this.partApi = new PartApi(this.configuration);
-
+    public initApp() {
         this.ListenForAppClicks();
         this.AddPostMessageListener();
         this.NotifyOnshapeAppInit();
         this.startApp();
     }
-
     /**
-     *  Notify Onshape that we have initialized and are ready to do work
+     * Notify Onshape that we have initialized and are ready to do work
      * See: https://onshape-public.github.io/docs/clientmessaging/
      */
     public NotifyOnshapeAppInit() {
@@ -448,11 +126,9 @@ export class BaseApp {
             'message',
             (event: Event) => {
                 this.handlePostMessage(event as MessageEvent<any>);
-                // event
             },
             false
         );
-        //console.log('Event Listener added to %o', window);
     }
     /**
      * Listen for clicks in our application and post a message to the Onshape client
@@ -482,7 +158,7 @@ export class BaseApp {
      */
     public startApp(): void {}
     /**
-     * This is called when there is a problem initializing/getting the authorization token
+     * This is called when there is a problem in the application that can't be recovered from
      * @param reason Initialization failure reason
      */
     public failApp(reason: string): void {
@@ -500,6 +176,7 @@ export class BaseApp {
      */
     public init(): void {
         this.showInitializing();
+        let config: onshapeConfig = { myserver: this.myserver };
 
         // Parse query parameters
         let queryParameters = decodeURIComponent(
@@ -514,58 +191,25 @@ export class BaseApp {
             let idx = queryParametersArray[i].indexOf('=');
             let parm = queryParametersArray[i].substring(0, idx);
             let val = queryParametersArray[i].substring(idx + 1);
-            switch (parm) {
-                case 'documentId':
-                    this.documentId = val;
-                    break;
-                case 'workspaceId':
-                    this.workspaceId = val;
-                    break;
-                case 'elementId':
-                    this.elementId = val;
-                    break;
-                case 'server':
-                    this.server = val;
-                    break;
-                case 'companyId':
-                    this.companyId = val;
-                    break;
-                case 'userId':
-                    this.userId = val;
-                    break;
-                case 'code':
-                    this.code = val;
-                    break;
-                case 'clientId':
-                    this.clientId = val;
-                    // console.log('Setting clientId=%s', this.clientId);
-                    break;
-                case 'locale':
-                    break;
-                default:
-                    console.log('Did not handle %s=%s', parm, val);
-            }
+            config[parm] = val;
         }
         //
-        // We need to reconstruct the redirect_uri which was used to start the application.
-        // It must match EXACTLY what is put into the ActionURL redirect_uri for the extension
-        // See https://onshape-public.github.io/docs/oauth/#exchanging-the-code-for-a-token
+        // Cache the ones we need to work with overall
         //
-        const redirect_uri = `${this.myserver}/?documentId=${this.documentId}&workspaceId=${this.workspaceId}&elementId=${this.elementId}`;
+        this.documentId = config.documentId;
+        this.elementId = config.elementId;
+        this.workspaceId = config.workspaceId;
+        this.server = config.server;
         //
-        // Next we need to take the code and exchange it for authentication tokens
-        // Until we get a response, we don't do anything
+        // Initialize the Onshape APIs
         //
-        ExchangeToken(this.myserver + '/oauth.php', redirect_uri, this.code)
-            .then((v: IExchangeToken) => {
-                const now = new Date();
-                const expires = new Date(now.getTime() + v.expires_in * 1000);
-
-                // We have successfully gotten a token, time to start the app
-                this.initApp(v.access_token, v.refresh_token, expires);
+        this.onshape = new OnshapeAPI(config);
+        this.onshape
+            .init()
+            .then(() => {
+                this.initApp();
             })
             .catch((reason: string) => {
-                // Something went wrong, so let the user know
                 this.failApp(reason);
             });
     }

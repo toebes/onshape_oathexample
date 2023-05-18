@@ -40,6 +40,9 @@ import {
     BTMConfigurationParameterEnum105,
     BTMConfigurationParameterQuantity1826,
     BTMConfigurationParameterString872,
+    BTMIndividualQuery138,
+    BTMParameterDerived864,
+    BTMParameterQueryList148,
     GBTElementType,
     GetInsertablesRequest,
 } from 'onshape-typescript-fetch';
@@ -578,7 +581,7 @@ export class App extends BaseApp {
                 img = createSVGIcon('svg-icon-folder', 'folder-list-icon');
             } else if (item.jsonType === 'document-summary') {
                 // It has an image, so request the thumbnail to be loaded for it
-                img = this.createThumbnailImage(itemInfo);
+                img = this.onshape.createThumbnailImage(itemInfo);
                 img.classList.add('os-thumbnail-image');
                 img.setAttribute('draggable', 'false');
                 img.setAttribute('alt', 'Thumbnail image for a document.');
@@ -774,7 +777,7 @@ export class App extends BaseApp {
         elementId?: string
     ): Promise<BTDocumentElementInfo> {
         return new Promise((resolve, reject) => {
-            this.documentApi
+            this.onshape.documentApi
                 .getElementsInDocument({
                     did: documentId,
                     wvm: 'w',
@@ -878,7 +881,9 @@ export class App extends BaseApp {
                 includeVariableStudios: false,
             };
 
-            let insertables = await this.documentApi.getInsertables(parameters);
+            let insertables = await this.onshape.documentApi.getInsertables(
+                parameters
+            );
             const result: BTInsertableInfo[] = [];
             let donotuseelement: BTInsertableInfo = undefined;
             const insertMap = new Map<string, BTInsertableInfo>();
@@ -920,7 +925,7 @@ export class App extends BaseApp {
                 ) {
                     insertables = undefined;
                 } else {
-                    insertables = (await this.OnshapeRequest(
+                    insertables = (await this.onshape.OnshapeRequest(
                         insertables.next,
                         BTInsertablesListResponseFromJSON
                     )) as BTInsertablesListResponse;
@@ -1072,7 +1077,7 @@ export class App extends BaseApp {
         });
         divParentItem.append(divParentThumbnailContainer);
 
-        const imgParentThumbnail = this.createThumbnailImage(parent);
+        const imgParentThumbnail = this.onshape.createThumbnailImage(parent);
         itemParentRow.append(divParentItem);
 
         divParentThumbnailContainer.append(imgParentThumbnail);
@@ -1105,7 +1110,7 @@ export class App extends BaseApp {
             const childThumbnailDiv = createDocumentElement('div', {
                 class: 'select-item-dialog-thumbnail-container os-no-shrink',
             });
-            const imgChildThumbnail = this.createThumbnailImage(parent);
+            const imgChildThumbnail = this.onshape.createThumbnailImage(parent);
             childThumbnailDiv.append(imgChildThumbnail);
             const childNameDiv = createDocumentElement('div', {
                 class: 'select-item-dialog-item-name',
@@ -1157,7 +1162,7 @@ export class App extends BaseApp {
             wvm = 'w';
             wvmid = item.workspaceId;
         }
-        const itemConfig = await this.elementApi.getConfiguration({
+        const itemConfig = await this.onshape.elementApi.getConfiguration({
             did: item.documentId,
             wvm: wvm,
             wvmid: wvmid,
@@ -1568,6 +1573,230 @@ export class App extends BaseApp {
         alert(
             `Inserting item ${item.id} - ${item.elementName} into Part Studio ${documentId}/w/${workspaceId}/e/${elementId}`
         );
+        this.setInProgress();
+
+        //
+        // "feature": {
+        //     "btType": "BTMFeature-134",
+        //     "namespace": "",
+        //     "name": `Derived ${insertable.name}`,
+        //     "suppressed": false,
+        //     "parameters": [
+        //       {
+        //         "btType": "BTMParameterQueryList-148",
+        //         "queries": [
+        //           {
+        //             "btType": "BTMIndividualQuery-138",
+        //             "queryStatement": null,
+        //             "queryString": insertable.type === "PART" ? `query=qTransient("${insertable.partId}");` : "query=qEverything(EntityType.BODY);"
+        //           }
+        //         ],
+        //         "parameterId": "parts"
+        //       },
+        //       {
+        //         "btType": "BTMParameterDerived-864",
+        //         "configuration": configList,
+        //         "parameterId": "buildFunction",
+        //         "namespace": namespace,
+        //         "imports": []
+        //       }
+        //     ],
+        //     "featureType": "importDerived",
+        //     "subFeatures": [],
+        //     "returnAfterSubfeatures": false
+        //   },
+        //   "libraryVersion": 1746,
+        //   "microversionSkew": false,
+        //   "rejectMicroversionSkew": false,
+        //   "serializationVersion": "1.1.23"
+        //   //
+        const iquery: BTMIndividualQuery138 = {
+            btType: 'BTMIndividualQuery-138',
+            queryStatement: null,
+            queryString: item.insertableQuery,
+            // item.elementType === 'PARTSTUDIO'
+            //     ? `query=qTransient("${item.elementId}");`
+            //     : 'query=qEverything(EntityType.BODY);', // item.insertableQuery,
+        };
+        const queryList: BTMParameterQueryList148 = {
+            btType: 'BTMParameterQueryList-148',
+            queries: [iquery],
+            parameterId: 'parts',
+        };
+        const btparameterDerived: BTMParameterDerived864 = {
+            btType: 'BTMParameterDerived-864',
+            parameterId: 'buildFunction',
+            namespace: '',
+            imports: [],
+        };
+        this.onshape.partStudioApi
+            .addPartStudioFeature({
+                did: documentId,
+                wvm: 'w',
+                wvmid: workspaceId,
+                eid: elementId,
+                bTFeatureDefinitionCall1406: {
+                    feature: {
+                        btType: 'BTMFeature-134',
+                        // featureId: "", // wasn't supplied
+                        namespace: '', // Where does this come from?
+                        name: `Derived ${item.elementName}`,
+                        suppressed: false,
+                        parameters: [queryList, btparameterDerived],
+                        featureType: 'importDerived', // Where does this come from?
+                        subFeatures: [
+                            // {
+                            //    btType: string,
+                            //    featureId: string,
+                            //    featureType: string,
+                            //    importMicroversion: string,
+                            //    name: string,
+                            //    namespace: string,
+                            //    nodeId: string,
+                            //    parameters: Array<BTMParameter1>,
+                            //    returnAfterSubfeatures: boolean,
+                            //    subFeatures: Array<BTMFeature134>,
+                            //    suppressed: boolean,
+                            //    suppressionConfigured: boolean,
+                            //    variableStudioReference: boolean,
+                            // }
+                        ],
+                        // importMicroversion: "", // importMicroversion wasn't supplied
+                        // nodeId: "", // NodeId wasn't supplied
+                        returnAfterSubfeatures: false, // Why is this
+                        suppressionConfigured: false, // When would it be true
+                        variableStudioReference: false, // When would it be true
+                    },
+                    libraryVersion: 1746, // Where did this come from?
+                    microversionSkew: false, // Why is it false
+                    rejectMicroversionSkew: false, // Why is it false?
+                    serializationVersion: '1.1.23', // Where did this come from?
+                    // sourceMicroversion: item.microversionId,  // Do we really need this?
+
+                    //     documentId: item.documentId,
+                    // elementId: item.elementId,
+                    // featureId: '', // item.featureId,
+                    // isAssembly: item.elementType == 'ASSEMBLY',
+                    // isWholePartStudio: false, // TODO: Figure this out
+                    // microversionId: '', // item.microversionId,  // If you do this, it gives an error 400: Microversions may not be used with linked document references
+                    // partId: item.deterministicId ?? '',
+                    // versionId: item.versionId,
+                },
+            })
+            .then(() => {
+                this.setInProgress(false);
+            })
+            .catch((reason) => {
+                this.setInProgress(false);
+
+                // TODO: Figure out why we don't get any output when it actually succeeds
+                if (reason !== 'Unexpected end of JSON input') {
+                    console.log(`failed to create reason=${reason}`);
+                }
+            });
+
+        // https://cad.onshape.com/glassworks/explorer/#/PartStudio/addPartStudioFeature
+        // https://mkcad.julias.ch/api/derive?documentId=35e289af2a7239457d521599&workspaceId=e503c9b1ce6051d7f917fa0d&elementId=f0f8230f5687ae56ebfc2eb2
+        // {
+        //     "feature": {
+        //         "btType": "BTMFeature-134",
+        //         "namespace": "",
+        //         "name": "Derived 1/4\"-20 Nylon-Insert Locknut",
+        //         "suppressed": false,
+        //         "parameters": [
+        //             {
+        //                 "btType": "BTMParameterQueryList-148",
+        //                 "queries": [
+        //                     {
+        //                         "btType": "BTMIndividualQuery-138",
+        //                         "queryStatement": null,
+        //                         "queryString": "query=qTransient(\"JGD\");"
+        //                     }
+        //                 ],
+        //                 "parameterId": "parts"
+        //             },
+        //             {
+        //                 "btType": "BTMParameterDerived-864",
+        //                 "configuration": [],
+        //                 "parameterId": "buildFunction",
+        //                 "namespace": "d8d7236e497bf1e271e21fbd2::v915cb4e82cd2cf0292eaddb9::eb46a39d3fcc4d6fdb0ca8e71::m55cbb654f746f090e68a5b97",
+        //                 "imports": []
+        //             }
+        //         ],
+        //         "featureType": "importDerived",
+        //         "subFeatures": [],
+        //         "returnAfterSubfeatures": false
+        //     },
+        //     "libraryVersion": 1746,
+        //     "microversionSkew": false,
+        //     "rejectMicroversionSkew": false,
+        //     "serializationVersion": "1.1.23"
+        // }
+
+        ///
+        //
+        //https://mkcad.julias.ch/api/derive?documentId=35e289af2a7239457d521599&workspaceId=e503c9b1ce6051d7f917fa0d&elementId=f0f8230f5687ae56ebfc2eb2
+        // {
+        //     "feature": {
+        //         "btType": "BTMFeature-134",
+        //         "namespace": "",
+        //         "name": "Derived 100t 32dp Aluminum 3/8\" Hex Bore Gear (217-5865)",
+        //         "suppressed": false,
+        //         "parameters": [
+        //             {
+        //                 "btType": "BTMParameterQueryList-148",
+        //                 "queries": [
+        //                     {
+        //                         "btType": "BTMIndividualQuery-138",
+        //                         "queryStatement": null,
+        //                         "queryString": "query=qTransient(\"JFD\");"
+        //                     }
+        //                 ],
+        //                 "parameterId": "parts"
+        //             },
+        //             {
+        //                 "btType": "BTMParameterDerived-864",
+        //                 "configuration": [],
+        //                 "parameterId": "buildFunction",
+        //                 "namespace": "d92ef235726d5987b44918f0f::vcfb6c10987e76f2203a7c934::e1cde932d49318ca654671d02::ma95af46797a48ecd29f9b998",
+        //                 "imports": []
+        //             }
+        //         ],
+        //         "featureType": "importDerived",
+        //         "subFeatures": [],
+        //         "returnAfterSubfeatures": false
+        //     },
+        //     "libraryVersion": 1746,
+        //     "microversionSkew": false,
+        //     "rejectMicroversionSkew": false,
+        //     "serializationVersion": "1.1.23"
+        // }
+
+        // What I have to insert from:
+        // {
+        //     "bodyType": "SOLID",
+        //     "classType": 565,
+        //     "dataType": "onshape/partstudio",
+        //     "deterministicId": "JFD",
+        //     "documentId": "ebd4c23d86c9b5f66e5fd33c",
+        //     "elementId": "a7c968bd4a762c94f48de789",
+        //     "elementName": "3.75” Aluminum Channel 585443",
+        //     "elementType": "PARTSTUDIO",
+        //     "hasFaults": false,
+        //     "id": "5e6e90a71742ae1189de5f70",
+        //     "insertableQuery": "query=qCompressed(1.0,\"%B5$QueryM5Sa$entityTypeBa$EntityTypeS4$BODYSb$historyTypeS8$CREATIONS9$importTagD599Sb$operationIdB2$IdA1Sf.8$FmLufIQFfc3lODrimportOpS9$queryTypeS6$IMPORT\",id);",
+        //     "isFlattenedBody": false,
+        //     "isMesh": false,
+        //     "meshState": "NO_MESH",
+        //     "microversionId": "9ec93af8215c759725906b01",
+        //     "parentId": "5e6e90a71742ae1189de5f6f",
+        //     "partName": "3.75” Aluminum Channel 585443",
+        //     "predictableThumbnailId": "7b47725708a11dfaf38ddaf806d0509834433f17",
+        //     "thumbnailUri": "/api/thumbnails/7b47725708a11dfaf38ddaf806d0509834433f17",
+        //     "unflattenedPartDeterministicId": "",
+        //     "versionId": "27b2a4de47f18a8a4a35c039",
+        //     "versionName": "V3"
+        // }
     }
     /**
      * Insert an item into an Assembly
@@ -1588,7 +1817,7 @@ export class App extends BaseApp {
 
         this.setInProgress();
 
-        this.assemblyApi
+        this.onshape.assemblyApi
             .createInstance({
                 did: documentId,
                 wid: workspaceId,
@@ -1636,7 +1865,7 @@ export class App extends BaseApp {
     public processMagicNode(magic: string) {
         // uri: string) {
         // Get Onshape to return the list
-        this.globaltreenodesApi
+        this.onshape.globalTreeNodesApi
             .globalTreeNodesMagic({
                 mid: magic,
                 getPathToRoot: true,
@@ -1708,12 +1937,14 @@ export class App extends BaseApp {
                         rowelem.remove();
                         // Request the UI to jump to the next entry in the list.
                         this.setRunning(true);
-                        this.OnshapeRequest(
-                            info.next,
-                            BTGlobalTreeNodesInfoFromJSON
-                        ).then((res: BTGlobalTreeNodesInfo) => {
-                            this.ProcessNodeResults(res, teamroot);
-                        });
+                        this.onshape
+                            .OnshapeRequest(
+                                info.next,
+                                BTGlobalTreeNodesInfoFromJSON
+                            )
+                            .then((res: BTGlobalTreeNodesInfo) => {
+                                this.ProcessNodeResults(res, teamroot);
+                            });
                     }
                 },
                 { threshold: [0] }
@@ -1754,7 +1985,7 @@ export class App extends BaseApp {
         const container = this.getFileListContainer();
         dumpNodes.appendChild(container);
         if (item.jsonType === 'team-summary') {
-            this.globaltreenodesApi
+            this.onshape.globalTreeNodesApi
                 .globalTreeNodesTeamInsertables({
                     teamId: item.id,
                     getPathToRoot: true,
@@ -1774,7 +2005,7 @@ export class App extends BaseApp {
                     this.setRunning(false);
                 });
         } else {
-            this.globaltreenodesApi
+            this.onshape.globalTreeNodesApi
                 .globalTreeNodesFolderInsertables({
                     fid: item.id,
                     getPathToRoot: true,
