@@ -1570,12 +1570,10 @@ export class App extends BaseApp {
         elementId: string,
         item: BTInsertableInfo
     ): void {
-        alert(
+        console.log(
             `Inserting item ${item.id} - ${item.elementName} into Part Studio ${documentId}/w/${workspaceId}/e/${elementId}`
         );
         this.setInProgress();
-
-        //
         // "feature": {
         //     "btType": "BTMFeature-134",
         //     "namespace": "",
@@ -1609,14 +1607,17 @@ export class App extends BaseApp {
         //   "microversionSkew": false,
         //   "rejectMicroversionSkew": false,
         //   "serializationVersion": "1.1.23"
-        //   //
+        const namespace = `d${item.documentId}::v${item.versionId}::e${
+            item.elementId
+        }::m${item.microversionId ?? '0'}`;
         const iquery: BTMIndividualQuery138 = {
             btType: 'BTMIndividualQuery-138',
             queryStatement: null,
-            queryString: item.insertableQuery,
-            // item.elementType === 'PARTSTUDIO'
-            //     ? `query=qTransient("${item.elementId}");`
-            //     : 'query=qEverything(EntityType.BODY);', // item.insertableQuery,
+            // item.insertableQuery,
+            queryString:
+                item.elementType === 'PARTSTUDIO'
+                    ? `query=qTransient("${item.deterministicId}");` // item.elementId
+                    : 'query=qEverything(EntityType.BODY);', // item.insertableQuery,
         };
         const queryList: BTMParameterQueryList148 = {
             btType: 'BTMParameterQueryList-148',
@@ -1626,7 +1627,7 @@ export class App extends BaseApp {
         const btparameterDerived: BTMParameterDerived864 = {
             btType: 'BTMParameterDerived-864',
             parameterId: 'buildFunction',
-            namespace: '',
+            namespace: namespace,
             imports: [],
         };
         this.onshape.partStudioApi
@@ -1644,36 +1645,19 @@ export class App extends BaseApp {
                         suppressed: false,
                         parameters: [queryList, btparameterDerived],
                         featureType: 'importDerived', // Where does this come from?
-                        subFeatures: [
-                            // {
-                            //    btType: string,
-                            //    featureId: string,
-                            //    featureType: string,
-                            //    importMicroversion: string,
-                            //    name: string,
-                            //    namespace: string,
-                            //    nodeId: string,
-                            //    parameters: Array<BTMParameter1>,
-                            //    returnAfterSubfeatures: boolean,
-                            //    subFeatures: Array<BTMFeature134>,
-                            //    suppressed: boolean,
-                            //    suppressionConfigured: boolean,
-                            //    variableStudioReference: boolean,
-                            // }
-                        ],
+                        subFeatures: [],
                         // importMicroversion: "", // importMicroversion wasn't supplied
                         // nodeId: "", // NodeId wasn't supplied
                         returnAfterSubfeatures: false, // Why is this
-                        suppressionConfigured: false, // When would it be true
-                        variableStudioReference: false, // When would it be true
+                        // suppressionConfigured: false, // When would it be true
+                        // variableStudioReference: false, // When would it be true
                     },
                     libraryVersion: 1746, // Where did this come from?
                     microversionSkew: false, // Why is it false
                     rejectMicroversionSkew: false, // Why is it false?
                     serializationVersion: '1.1.23', // Where did this come from?
                     // sourceMicroversion: item.microversionId,  // Do we really need this?
-
-                    //     documentId: item.documentId,
+                    // documentId: item.documentId,
                     // elementId: item.elementId,
                     // featureId: '', // item.featureId,
                     // isAssembly: item.elementType == 'ASSEMBLY',
@@ -1694,109 +1678,6 @@ export class App extends BaseApp {
                     console.log(`failed to create reason=${reason}`);
                 }
             });
-
-        // https://cad.onshape.com/glassworks/explorer/#/PartStudio/addPartStudioFeature
-        // https://mkcad.julias.ch/api/derive?documentId=35e289af2a7239457d521599&workspaceId=e503c9b1ce6051d7f917fa0d&elementId=f0f8230f5687ae56ebfc2eb2
-        // {
-        //     "feature": {
-        //         "btType": "BTMFeature-134",
-        //         "namespace": "",
-        //         "name": "Derived 1/4\"-20 Nylon-Insert Locknut",
-        //         "suppressed": false,
-        //         "parameters": [
-        //             {
-        //                 "btType": "BTMParameterQueryList-148",
-        //                 "queries": [
-        //                     {
-        //                         "btType": "BTMIndividualQuery-138",
-        //                         "queryStatement": null,
-        //                         "queryString": "query=qTransient(\"JGD\");"
-        //                     }
-        //                 ],
-        //                 "parameterId": "parts"
-        //             },
-        //             {
-        //                 "btType": "BTMParameterDerived-864",
-        //                 "configuration": [],
-        //                 "parameterId": "buildFunction",
-        //                 "namespace": "d8d7236e497bf1e271e21fbd2::v915cb4e82cd2cf0292eaddb9::eb46a39d3fcc4d6fdb0ca8e71::m55cbb654f746f090e68a5b97",
-        //                 "imports": []
-        //             }
-        //         ],
-        //         "featureType": "importDerived",
-        //         "subFeatures": [],
-        //         "returnAfterSubfeatures": false
-        //     },
-        //     "libraryVersion": 1746,
-        //     "microversionSkew": false,
-        //     "rejectMicroversionSkew": false,
-        //     "serializationVersion": "1.1.23"
-        // }
-
-        ///
-        //
-        //https://mkcad.julias.ch/api/derive?documentId=35e289af2a7239457d521599&workspaceId=e503c9b1ce6051d7f917fa0d&elementId=f0f8230f5687ae56ebfc2eb2
-        // {
-        //     "feature": {
-        //         "btType": "BTMFeature-134",
-        //         "namespace": "",
-        //         "name": "Derived 100t 32dp Aluminum 3/8\" Hex Bore Gear (217-5865)",
-        //         "suppressed": false,
-        //         "parameters": [
-        //             {
-        //                 "btType": "BTMParameterQueryList-148",
-        //                 "queries": [
-        //                     {
-        //                         "btType": "BTMIndividualQuery-138",
-        //                         "queryStatement": null,
-        //                         "queryString": "query=qTransient(\"JFD\");"
-        //                     }
-        //                 ],
-        //                 "parameterId": "parts"
-        //             },
-        //             {
-        //                 "btType": "BTMParameterDerived-864",
-        //                 "configuration": [],
-        //                 "parameterId": "buildFunction",
-        //                 "namespace": "d92ef235726d5987b44918f0f::vcfb6c10987e76f2203a7c934::e1cde932d49318ca654671d02::ma95af46797a48ecd29f9b998",
-        //                 "imports": []
-        //             }
-        //         ],
-        //         "featureType": "importDerived",
-        //         "subFeatures": [],
-        //         "returnAfterSubfeatures": false
-        //     },
-        //     "libraryVersion": 1746,
-        //     "microversionSkew": false,
-        //     "rejectMicroversionSkew": false,
-        //     "serializationVersion": "1.1.23"
-        // }
-
-        // What I have to insert from:
-        // {
-        //     "bodyType": "SOLID",
-        //     "classType": 565,
-        //     "dataType": "onshape/partstudio",
-        //     "deterministicId": "JFD",
-        //     "documentId": "ebd4c23d86c9b5f66e5fd33c",
-        //     "elementId": "a7c968bd4a762c94f48de789",
-        //     "elementName": "3.75” Aluminum Channel 585443",
-        //     "elementType": "PARTSTUDIO",
-        //     "hasFaults": false,
-        //     "id": "5e6e90a71742ae1189de5f70",
-        //     "insertableQuery": "query=qCompressed(1.0,\"%B5$QueryM5Sa$entityTypeBa$EntityTypeS4$BODYSb$historyTypeS8$CREATIONS9$importTagD599Sb$operationIdB2$IdA1Sf.8$FmLufIQFfc3lODrimportOpS9$queryTypeS6$IMPORT\",id);",
-        //     "isFlattenedBody": false,
-        //     "isMesh": false,
-        //     "meshState": "NO_MESH",
-        //     "microversionId": "9ec93af8215c759725906b01",
-        //     "parentId": "5e6e90a71742ae1189de5f6f",
-        //     "partName": "3.75” Aluminum Channel 585443",
-        //     "predictableThumbnailId": "7b47725708a11dfaf38ddaf806d0509834433f17",
-        //     "thumbnailUri": "/api/thumbnails/7b47725708a11dfaf38ddaf806d0509834433f17",
-        //     "unflattenedPartDeterministicId": "",
-        //     "versionId": "27b2a4de47f18a8a4a35c039",
-        //     "versionName": "V3"
-        // }
     }
     /**
      * Insert an item into an Assembly
