@@ -60,7 +60,16 @@ config = {
     },
     resolve: {
         modules: [__dirname, path.join(__dirname, 'node_modules')],
-        extensions: ['.ts', '.js', '.css', '.eot', '.png', '.svg', '.json'],
+        extensions: [
+            '.ts',
+            '.tsx',
+            '.js',
+            '.css',
+            '.eot',
+            '.png',
+            '.svg',
+            '.json',
+        ],
     },
     module: {
         rules: [

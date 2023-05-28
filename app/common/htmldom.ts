@@ -49,6 +49,36 @@ export function createDocumentElement(
     }
     return elem;
 }
+
+/**
+ * Create an HTML Dom Element from a string
+ * from https://stackoverflow.com/questions/494143/creating-a-new-dom-element-from-an-html-string-using-built-in-dom-methods-or-pro
+ * var td = htmlToElement('<td>foo</td>'),
+ *   div = htmlToElement('<div><span>nested</span> <span>stuff</span></div>');
+ *
+ * @param {String} HTML representing a single element
+ * @return {Element}
+ */
+export function htmlToElement(html: string): ChildNode {
+    var template = document.createElement('template');
+    html = html.trim(); // Never return a text node of whitespace as the result
+    template.innerHTML = html;
+    return template.content.firstChild;
+}
+
+/**
+ * Create a list of HTML Dom Elements from a string
+ * from https://stackoverflow.com/questions/494143/creating-a-new-dom-element-from-an-html-string-using-built-in-dom-methods-or-pro
+ * @param {String} HTML representing any number of sibling elements
+ * @return {NodeList}
+ */
+export function htmlToElements(html: string): NodeListOf<ChildNode> {
+    var template = document.createElement('template');
+    template.innerHTML = html;
+    return template.content.childNodes;
+}
+
+var rows = htmlToElements('<tr><td>foo</td></tr><tr><td>bar</td></tr>');
 /**
  * Show a tooltip for an element after a given time and automatically take it down when they move off the element
  * @param elem

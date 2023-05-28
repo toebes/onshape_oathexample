@@ -1,0 +1,235 @@
+<div class="select-item-configuration-selector">
+    <!-- Configuration parameters -->
+    <os-parameter-list-view>
+
+        <os-parameter-group group="group">
+            <div class="os-parameter-list-item os-param-fill-first-column" data-parameter-id="List_xhwsnzXruq3Ri4">
+                <os-enum-parameter>
+                    <span class="os-param-wrapper os-param-select">
+                        <label class="os-param-label">
+                            <span>Which Extra Block</span>
+                        </label>
+                        <div class="os-select-container os-select-bootstrap dropdown ng-not-empty ng-valid"
+                            theme="bootstrap" enter-activate="true" skip-focusser="false" append-to-body="true"
+                            focus-on="FOCUS_ELEMENT" backspace-reset="false" data-parameter-id="List_xhwsnzXruq3Ri4">
+                            <div class="os-select-match" placeholder="">
+                                <span tabindex="-1" class="btn btn-secondary form-control os-select-toggle"
+                                    aria-label="Select box activate" style="outline: 0;">
+                                    <span class="os-select-placeholder text-muted ng-hide">
+                                    </span>
+                                    <span class="os-select-match-text float-start">
+                                        <span>Item1</span>
+                                    </span>
+                                    <i class="caret float-end">
+                                    </i>
+                                    <a aria-label="Select box clear" style="margin-right: 10px"
+                                        class="btn btn-sm btn-link float-end ng-hide">
+                                        <i class="glyphicon glyphicon-remove" aria-hidden="true">
+                                        </i>
+                                    </a>
+                                </span>
+                            </div>
+                            <span class="os-spinner-small os-spinner-spinning ng-hide">
+                            </span>
+                            <input type="search" autocomplete="off" tabindex="-1" aria-expanded="true"
+                                aria-label="Select box" aria-owns="os-select-choices-0"
+                                class="form-control os-select-search ng-pristine ng-untouched ng-valid ng-empty ng-hide"
+                                placeholder="">
+                            <ul class="os-select-choices os-select-choices-content os-select-dropdown dropdown-menu ng-hide"
+                                oncontextmenu="return false;"
+                                repeat="option.value.value as (key, option) in $ctrl.btParameter.availableOptions | osSelectParameterSearch: $select.search">
+                                <li class="os-select-choices-group" id="os-select-choices-0">
+                                    <div class="dropdown-divider ng-hide">
+                                    </div>
+                                    <div class="os-select-choices-group-label dropdown-header ng-hide">
+                                    </div>
+                                </li>
+                            </ul>
+                            <div class="os-select-no-choice">
+                            </div>
+                            <os-select-single>
+                            </os-select-single>
+                            <input class="os-select-focusser os-select-offscreen" type="text" id="focusser-0"
+                                aria-label="Select box focus" role="button">
+                        </div>
+                    </span>
+                </os-enum-parameter>
+            </div>
+        </os-parameter-group>
+
+        <os-parameter-group group="group">
+            <div class="os-parameter-list-item os-param-fill-first-column" data-parameter-id="CheckBox">
+                <os-boolean-parameter>
+                    <div class="os-param-wrapper os-param-container" data-parameter-id="CheckBox">
+                        <label class="os-param-checkbox">
+                            <input class="os-param-checkbox-input ng-pristine ng-untouched ng-valid ng-not-empty"
+                                type="checkbox" data-parameter-value="true">
+                            <span class="os-checkbox-indicator">
+                            </span>
+                            <span class="os-param-checkbox-label">MakeItRed</span>
+                        </label>
+                    </div>
+                </os-boolean-parameter>
+            </div>
+        </os-parameter-group>
+
+        <os-parameter-group group="group">
+            <div class="os-parameter-list-item os-param-fill-first-column" data-parameter-id="LengthVariable">
+                <os-quantity-parameter>
+                    <div class="os-param-wrapper os-param-container" data-parameter-id="LengthVariable">
+                        <label class="os-param-label">
+                            <span>LengthVariable</span>
+                        </label>
+                        <!-- Space after computed so that italics are not cut off -->
+                        <div class="quantity-autocomplete-holder dropdown"
+                            is-open="$ctrl.btParameter.isAutocompleteOpen">
+                            <input
+                                class="os-param-number dropdown-source ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item"
+                                type="text" autocomplete="off">
+                            <ul class="quantity-parameter-autocomplete-menu os-col ng-hide">
+                            </ul>
+                        </div>
+                    </div>
+                </os-quantity-parameter>
+            </div>
+        </os-parameter-group>
+
+        <os-parameter-group group="group">
+            <div class="os-parameter-list-item os-param-fill-first-column" data-parameter-id="Angle_Variable">
+                <os-quantity-parameter>
+                    <div class="os-param-wrapper os-param-container" data-parameter-id="Angle_Variable">
+                        <label class="os-param-label">
+                            <span>Angle Variable</span>
+                        </label>
+                        <!-- Space after computed so that italics are not cut off -->
+                        <div class="quantity-autocomplete-holder dropdown"
+                            is-open="$ctrl.btParameter.isAutocompleteOpen">
+                            <input
+                                class="os-param-number dropdown-source ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item"
+                                type="text" autocomplete="off">
+                            <ul class="quantity-parameter-autocomplete-menu os-col ng-hide">
+                            </ul>
+                        </div>
+                    </div>
+                </os-quantity-parameter>
+            </div>
+        </os-parameter-group>
+
+        <os-parameter-group group="group">
+            <div class="os-parameter-list-item os-param-fill-first-column" data-parameter-id="Integer_Variable">
+                <os-quantity-parameter>
+                    <div class="os-param-wrapper os-param-container" data-parameter-id="Integer_Variable">
+                        <label class="os-param-label">
+                            <span>Holes</span>
+                        </label>
+                        <!-- Space after computed so that italics are not cut off -->
+                        <div class="quantity-autocomplete-holder dropdown"
+                            is-open="$ctrl.btParameter.isAutocompleteOpen">
+                            <input
+                                class="os-param-number dropdown-source ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item"
+                                type="text" autocomplete="off">
+                            <ul class="quantity-parameter-autocomplete-menu os-col ng-hide">
+                            </ul>
+                        </div>
+                    </div>
+                </os-quantity-parameter>
+            </div>
+        </os-parameter-group>
+
+        <os-parameter-group group="group">
+            <div class="os-parameter-list-item os-param-fill-first-column" data-parameter-id="RealVariable">
+                <os-quantity-parameter>
+                    <div class="os-param-wrapper os-param-container" data-parameter-id="RealVariable">
+                        <label class="os-param-label">
+                            <span>RealVariable</span>
+                        </label>
+                        <!-- Space after computed so that italics are not cut off -->
+                        <div class="quantity-autocomplete-holder dropdown"
+                            is-open="$ctrl.btParameter.isAutocompleteOpen">
+                            <input
+                                class="os-param-number dropdown-source ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item"
+                                type="text" autocomplete="off">
+                            <ul class="quantity-parameter-autocomplete-menu os-col ng-hide">
+                            </ul>
+                        </div>
+                    </div>
+                </os-quantity-parameter>
+            </div>
+        </os-parameter-group>
+
+        <os-parameter-group group="group">
+            <div class="os-parameter-list-item os-param-fill-first-column" data-parameter-id="TestVariable">
+                <os-string-parameter>
+                    <span class="os-param-wrapper os-param-container" data-parameter-id="TestVariable">
+                        <label class="os-param-label">TestVariable</label>
+                        <input class="os-param-text ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item"
+                            type="text" autocomplete="Me5eSx2pYY9dOwD0J" placeholder="">
+                    </span>
+                    <!-- add an optional toggle button and label for variable-name rename propagation support -->
+                </os-string-parameter>
+            </div>
+        </os-parameter-group>
+
+        <os-parameter-group group="group">
+            <div class="os-parameter-list-item os-param-fill-first-column" data-parameter-id="List_qZ128Eq2HMz4pF">
+                <os-enum-parameter>
+                    <span class="os-param-wrapper os-param-select">
+                        <label class="os-param-label">
+                            <span>Bottom Square Color</span>
+                        </label>
+                        <div class="os-select-container os-select-bootstrap dropdown ng-not-empty ng-valid"
+                            theme="bootstrap" enter-activate="true" skip-focusser="false" append-to-body="true"
+                            focus-on="FOCUS_ELEMENT" backspace-reset="false" data-parameter-id="List_qZ128Eq2HMz4pF">
+                            <div class="os-select-match" placeholder="">
+                                <span tabindex="-1" class="btn btn-secondary form-control os-select-toggle"
+                                    aria-label="Select box activate" style="outline: 0;">
+                                    <span class="os-select-placeholder text-muted ng-hide">
+                                    </span>
+                                    <span class="os-select-match-text float-start">
+                                        <span>Red</span>
+                                    </span>
+                                    <i class="caret float-end">
+                                    </i>
+                                    <a aria-label="Select box clear" style="margin-right: 10px"
+                                        class="btn btn-sm btn-link float-end ng-hide">
+                                        <i class="glyphicon glyphicon-remove" aria-hidden="true">
+                                        </i>
+                                    </a>
+                                </span>
+                            </div>
+                            <span class="os-spinner-small os-spinner-spinning ng-hide">
+                            </span>
+                            <input type="search" autocomplete="off" tabindex="-1" aria-expanded="true"
+                                aria-label="Select box" aria-owns="os-select-choices-1"
+                                class="form-control os-select-search ng-pristine ng-untouched ng-valid ng-empty ng-hide"
+                                placeholder="">
+                            <ul class="os-select-choices os-select-choices-content os-select-dropdown dropdown-menu ng-hide"
+                                oncontextmenu="return false;"
+                                repeat="option.value.value as (key, option) in $ctrl.btParameter.availableOptions | osSelectParameterSearch: $select.search">
+                                <li class="os-select-choices-group" id="os-select-choices-1">
+                                    <div class="dropdown-divider ng-hide">
+                                    </div>
+                                    <div class="os-select-choices-group-label dropdown-header ng-hide">
+                                    </div>
+                                </li>
+                            </ul>
+                            <div class="os-select-no-choice">
+                            </div>
+                            <os-select-single>
+                            </os-select-single>
+                            <input class="os-select-focusser os-select-offscreen" type="text" id="focusser-1"
+                                aria-label="Select box focus" role="button">
+                        </div>
+                    </span>
+                </os-enum-parameter>
+            </div>
+        </os-parameter-group>
+    </os-parameter-list-view>
+
+    <!-- Generate button -->
+    <div class="select-item-generate-button-holder">
+        <button class="os-button os-outline select-item-generate-button" disabled="disabled">
+            <span>Generate</span>
+        </button>
+    </div>
+</div>
