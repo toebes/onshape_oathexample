@@ -36,10 +36,6 @@ import {
     BTInsertableInfo,
     BTInsertablesListResponse,
     BTInsertablesListResponseFromJSON,
-    BTMConfigurationParameterBoolean2550,
-    BTMConfigurationParameterEnum105,
-    BTMConfigurationParameterQuantity1826,
-    BTMConfigurationParameterString872,
     BTMIndividualQuery138,
     BTMParameterDerived864,
     BTMParameterQueryList148,
@@ -48,16 +44,8 @@ import {
 } from 'onshape-typescript-fetch';
 import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
 import { JTTable } from './common/jttable';
-import {
-    classListAdd,
-    createDocumentElement,
-    htmlToElement,
-    waitForTooltip,
-} from './common/htmldom';
-import { genQuantityOption } from './components/optionquantity';
-import { genStringOption } from './components/optionstring';
-import { genBooleanOption } from './components/optionboolean';
-import { genEnumOption } from './components/optionenum';
+import { classListAdd, createDocumentElement, waitForTooltip } from './common/htmldom';
+import { genEnumOption } from './components/configurationoptions';
 
 export interface magicIconInfo {
     label: string;
@@ -73,20 +61,6 @@ export interface magicIconInfo {
 // * Implement hover-over to show additional information
 // * Teams doesn't put the teams icon in the breadcrumbs (is it possible?)
 // * After changing a configuration, if the image doesn't get updated (not available), set a timer and retry it
-
-enum configType {
-    configBool,
-    configEnum,
-    configQuantity,
-    configString,
-}
-// These mappings are used to convert from the odd names in the API to something more meaningful
-const configMapping: { [name: string]: configType } = {
-    'BTMConfigurationParameterBoolean-2550': configType.configBool,
-    'BTMConfigurationParameterEnum-105': configType.configEnum,
-    'BTMConfigurationParameterQuantity-1826': configType.configQuantity,
-    'BTMConfigurationParameterString-872': configType.configString,
-};
 
 export class App extends BaseApp {
     public myserver = 'https://ftconshape.com/oauthexample';
@@ -161,11 +135,7 @@ export class App extends BaseApp {
         this.setAppElements(div);
         this.setBreadcrumbs([], undefined);
 
-        this.getDocumentElementInfo(
-            this.documentId,
-            this.workspaceId,
-            this.elementId
-        )
+        this.getDocumentElementInfo(this.documentId, this.workspaceId, this.elementId)
             .then((val: BTDocumentElementInfo) => {
                 this.targetDocumentElementInfo = val;
 
@@ -210,10 +180,7 @@ export class App extends BaseApp {
     ): void {
         // Find where they want us to put the breadcrumbs
         const breadcrumbscontainer = document.getElementById('breadcrumbs');
-        if (
-            breadcrumbscontainer === undefined ||
-            breadcrumbscontainer === null
-        ) {
+        if (breadcrumbscontainer === undefined || breadcrumbscontainer === null) {
             // If we don't have a place for it, just skip out
             return;
         }
@@ -387,14 +354,9 @@ export class App extends BaseApp {
                     icon = 'svg-icon-team';
                     useteamicon = false;
                 }
-                breadcrumbdiv = this.createBreadcrumbNode(
-                    icon,
-                    node.name,
-                    isLast,
-                    () => {
-                        this.processFolder(node, teamroot);
-                    }
-                );
+                breadcrumbdiv = this.createBreadcrumbNode(icon, node.name, isLast, () => {
+                    this.processFolder(node, teamroot);
+                });
             }
             breadcrumbsdiv.appendChild(breadcrumbdiv);
             // Did we need to put in the fake team root that was missed in the breadcrumb list?
@@ -475,10 +437,7 @@ export class App extends BaseApp {
             if (!magicinfo.hideFromMenu) {
                 const row = table.addBodyRow();
                 const span = createDocumentElement('span');
-                const icon = createSVGIcon(
-                    magicinfo.icon,
-                    'documents-filter-icon'
-                );
+                const icon = createSVGIcon(magicinfo.icon, 'documents-filter-icon');
                 icon.onclick = () => {
                     this.dumpMagic(magicid);
                 };
@@ -502,9 +461,7 @@ export class App extends BaseApp {
      * @param running
      */
     public setRunning(running: boolean) {
-        const magicSelect = document.getElementById(
-            'magic'
-        ) as HTMLSelectElement;
+        const magicSelect = document.getElementById('magic') as HTMLSelectElement;
         if (magicSelect !== null) {
             magicSelect.disabled = running;
         }
@@ -847,10 +804,7 @@ export class App extends BaseApp {
             // for now we will assume it is always provided
             let wv = 'w';
             let wvid = '';
-            if (
-                item.recentVersion !== null &&
-                item.recentVersion !== undefined
-            ) {
+            if (item.recentVersion !== null && item.recentVersion !== undefined) {
                 wv = 'v';
                 wvid = item.recentVersion.id;
             } else if (
@@ -886,9 +840,7 @@ export class App extends BaseApp {
                 includeVariableStudios: false,
             };
 
-            let insertables = await this.onshape.documentApi.getInsertables(
-                parameters
-            );
+            let insertables = await this.onshape.documentApi.getInsertables(parameters);
             const result: BTInsertableInfo[] = [];
             let donotuseelement: BTInsertableInfo = undefined;
             const insertMap = new Map<string, BTInsertableInfo>();
@@ -900,9 +852,7 @@ export class App extends BaseApp {
                         (element.elementType === 'ASSEMBLY' &&
                             insertType === element.elementType)
                     ) {
-                        let elementName = (
-                            element.elementName ?? ''
-                        ).toUpperCase();
+                        let elementName = (element.elementName ?? '').toUpperCase();
 
                         if (
                             elementName.indexOf('DO NOT USE') < 0 &&
@@ -924,10 +874,7 @@ export class App extends BaseApp {
                     }
                 }
                 // If we are finished with the list return it
-                if (
-                    insertables.next === undefined ||
-                    insertables.next === null
-                ) {
+                if (insertables.next === undefined || insertables.next === null) {
                     insertables = undefined;
                 } else {
                     insertables = (await this.onshape.OnshapeRequest(
@@ -969,35 +916,34 @@ export class App extends BaseApp {
      */
     public checkInsertItem(item: BTDocumentSummaryInfo): void {
         this.hidePopup();
-        this.getInsertChoices(
-            item,
-            this.targetDocumentElementInfo.elementType
-        ).then((res) => {
-            if (res.length === 0) {
-                // Nothing was insertable at all, so we just need to let them know that
-                alert('Nothing is insertable from this document');
-            } else if (res.length === 1) {
-                if (
-                    res[0].configurationParameters !== undefined &&
-                    res[0].configurationParameters !== null
-                ) {
-                    this.showItemChoices(item, res);
+        this.getInsertChoices(item, this.targetDocumentElementInfo.elementType).then(
+            (res) => {
+                if (res.length === 0) {
+                    // Nothing was insertable at all, so we just need to let them know that
+                    alert('Nothing is insertable from this document');
+                } else if (res.length === 1) {
+                    if (
+                        res[0].configurationParameters !== undefined &&
+                        res[0].configurationParameters !== null
+                    ) {
+                        this.showItemChoices(item, res);
+                    } else {
+                        // Perform an actual insert of an item. Note that we already know if we are
+                        // going into a part studio or an assembly.
+                        this.insertToTarget(
+                            this.documentId,
+                            this.workspaceId,
+                            this.elementId,
+                            res[0]
+                        );
+                    }
                 } else {
-                    // Perform an actual insert of an item. Note that we already know if we are
-                    // going into a part studio or an assembly.
-                    this.insertToTarget(
-                        this.documentId,
-                        this.workspaceId,
-                        this.elementId,
-                        res[0]
-                    );
+                    console.log(`${res.length} choices found`);
+                    this.showItemChoices(item, res);
                 }
-            } else {
-                console.log(`${res.length} choices found`);
-                this.showItemChoices(item, res);
+                //console.log(res);
             }
-            //console.log(res);
-        });
+        );
     }
     /**
      * Show options for a configurable item to insert
@@ -1176,104 +1122,22 @@ export class App extends BaseApp {
             wvmid: wvmid,
             eid: item.elementId,
         });
-        console.log(
-            `Configuration ${itemConfig.configurationParameters.length} options`
-        );
-        const configSelector = createDocumentElement('div', {
-            class: 'select-item-configuration-selector',
-        });
-        const osParameterListView = createDocumentElement(
-            'os-parameter-list-view'
-        );
-        configSelector.append(osParameterListView);
-
-        itemParentGroup.append(configSelector);
-
-        for (let opt of itemConfig.configurationParameters) {
-            console.log(opt);
-            const osParameterGroup = createDocumentElement(
-                'os-parameter-group',
-                { group: 'group' }
-            );
-
-            const configDiv = createDocumentElement('div', {
-                class: 'os-parameter-list-item os-param-fill-first-column',
-                'data-parameter-id': opt.parameterId,
-            });
-            osParameterGroup.append(configDiv);
-            osParameterListView.append(osParameterGroup);
-            // configDiv.append(
-            //     htmlToElement(
-            //         `<div>${opt.btType}/${opt.parameterType}-${opt.parameterName}</div>`
-            //     )
-            // );
-
-            switch (configMapping[opt.btType]) {
-                case configType.configBool: {
-                    configDiv.append(
-                        genBooleanOption(
-                            opt as BTMConfigurationParameterBoolean2550,
-                            () => {
-                                console.log('Bool changed');
-                            }
-                        )
-                    );
-                    break;
-                }
-                case configType.configEnum: {
-                    // const optEnum = opt as BTMConfigurationParameterEnum105;
-                    configDiv.append(
-                        genEnumOption(
-                            opt as BTMConfigurationParameterEnum105,
-                            () => {
-                                console.log('Enum changed');
-                            }
-                        )
-                    );
-                    break;
-                }
-                case configType.configString: {
-                    configDiv.append(
-                        genStringOption(
-                            opt as BTMConfigurationParameterString872,
-                            () => {
-                                console.log('String changed');
-                            }
-                        )
-                    );
-                    break;
-                }
-                case configType.configQuantity: {
-                    configDiv.append(
-                        genQuantityOption(
-                            opt as BTMConfigurationParameterQuantity1826,
-                            () => {
-                                console.log('Quantity changed');
-                            }
-                        )
-                    );
-                    break;
-                }
-                default: {
-                    console.log(`Unknown configuration btType ${opt.btType}`);
-                }
-            }
-        }
-        if (itemConfig.configurationParameters.length > 1) {
-            const divButtonHolder = createDocumentElement('div', {
-                class: 'select-item-generate-button-holder',
-            });
-            osParameterListView.append(divButtonHolder);
-            const generateButton = htmlToElement(`
-                        <button class="os-button os-outline select-item-generate-button" disabled="disabled">
-                            <span>Generate</span>
-                        </button>`);
-            divButtonHolder.append(generateButton);
-            const btnElement = generateButton as HTMLElement;
-            btnElement.onclick = () => {
+        let onchange = () => {};
+        let ongenerate = () => {};
+        if (itemConfig.configurationParameters.length === 1) {
+            onchange = () => {
+                console.log('Single Iten Configuration click');
+            };
+        } else {
+            onchange = () => {
+                console.log('Multi-item Configuration click');
+            };
+            ongenerate = () => {
                 console.log('Generate Button Clicked');
             };
         }
+        console.log(`Configuration ${itemConfig.configurationParameters.length} options`);
+        itemParentGroup.append(genEnumOption(itemConfig, onchange, ongenerate));
     }
     /**
      * Insert to an unknown tab (generally this is an error)
@@ -1554,10 +1418,7 @@ export class App extends BaseApp {
                         // Request the UI to jump to the next entry in the list.
                         this.setRunning(true);
                         this.onshape
-                            .OnshapeRequest(
-                                info.next,
-                                BTGlobalTreeNodesInfoFromJSON
-                            )
+                            .OnshapeRequest(info.next, BTGlobalTreeNodesInfoFromJSON)
                             .then((res: BTGlobalTreeNodesInfo) => {
                                 this.ProcessNodeResults(res, teamroot);
                             });

@@ -78,7 +78,6 @@ export function htmlToElements(html: string): NodeListOf<ChildNode> {
     return template.content.childNodes;
 }
 
-var rows = htmlToElements('<tr><td>foo</td></tr><tr><td>bar</td></tr>');
 /**
  * Show a tooltip for an element after a given time and automatically take it down when they move off the element
  * @param elem

@@ -13,7 +13,14 @@ export namespace JSXFactory {
         if (tagName === Fragment) {
             return document.createDocumentFragment();
         }
-
+        // Support for components(ish)
+        if (typeof tagName === 'function') {
+            attributes = attributes || {};
+            const stack: any[] = [...children];
+            attributes.children = stack;
+            const tagfunc: (attributes: JSXFactory.AttributeCollection) => any = tagName;
+            return tagfunc(attributes);
+        }
         const element = document.createElement(tagName);
         if (attributes) {
             for (const key of Object.keys(attributes)) {
