@@ -43,7 +43,6 @@ import {
     BTMParameterEnum145,
     BTMParameterQuantity147,
     BTMParameterQueryList148,
-    BTMParameterReferenceWithConfiguration3028,
     BTMParameterString149,
     GBTElementType,
     GetInsertablesRequest,
@@ -75,7 +74,6 @@ export interface configInfo {
 
 export class App extends BaseApp {
     public myserver = 'https://ftconshape.com/oauthexample';
-    public running = false;
     public magic = 1;
     public loaded = 0;
     public loadedlimit = 2500; // Maximum number of items we will load
@@ -468,29 +466,11 @@ export class App extends BaseApp {
         this.setBreadcrumbs([], undefined);
     }
     /**
-     * Mark the UI as running.  We disable the dropdown so that you can't request
-     * switching while in the middle of running
-     * @param running
-     */
-    public setRunning(running: boolean) {
-        const magicSelect = document.getElementById('magic') as HTMLSelectElement;
-        if (magicSelect !== null) {
-            magicSelect.disabled = running;
-        }
-        this.running = running;
-    }
-    /**
      * Dump a list of entries from the Magic api
      * @param magic Which magic list to dump
      */
     public dumpMagic(magic: string): void {
-        // If we are in the process of running, we don't want to start things over again
-        // so just ignore the call here
-        if (this.running) {
-            return;
-        }
         // Note that we are running and reset the count of entries we have gotten
-        this.setRunning(true);
         this.hidePopup();
         this.loaded = 0;
 
@@ -599,6 +579,7 @@ export class App extends BaseApp {
                     };
                 } else if (item.jsonType === 'document-summary') {
                     rowelem.onclick = () => {
+                        this.hidePopup();
                         this.checkInsertItem(itemInfo);
                     };
                 }
@@ -1073,6 +1054,7 @@ export class App extends BaseApp {
         } else {
             uiDiv = document.body;
         }
+        this.hidePopup();
         // This is what we are creating in the DOM
         // itemTreeDiv                <div class="select-item-tree">
         //                                <!--Element level insertables-->
@@ -1192,11 +1174,6 @@ export class App extends BaseApp {
             if (configurable) {
                 childContainerDiv.onclick = () => {
                     const configValues = this.getConfigValues(index);
-                    console.log(
-                        'Need to figure out configuration options settings.. But going to run it anyway'
-                    );
-                    console.log(item);
-                    console.log(configValues);
                     this.insertToTarget(
                         this.documentId,
                         this.workspaceId,
@@ -1283,7 +1260,6 @@ export class App extends BaseApp {
                             );
                         }
                     }
-                    console.log('findDeterminsticPartId Complete');
                     resolve(item);
                 });
         });
@@ -1318,7 +1294,6 @@ export class App extends BaseApp {
             // Run them both in parallel and when they are complete we can do our work
             Promise.all([findPartPromise, itemConfigPromise]).then(
                 ([item, itemConfig]) => {
-                    console.log('Both promises complete');
                     let onchange = () => {};
                     let ongenerate = () => {};
                     if (itemConfig.configurationParameters.length === 1) {
@@ -1333,9 +1308,6 @@ export class App extends BaseApp {
                             console.log('Generate Button Clicked');
                         };
                     }
-                    console.log(
-                        `Configuration ${itemConfig.configurationParameters.length} options`
-                    );
                     itemParentGroup.append(
                         genEnumOption(itemConfig, index, onchange, ongenerate)
                     );
@@ -1722,7 +1694,6 @@ export class App extends BaseApp {
             .catch((err) => {
                 // Something went wrong, some mark us as no longer running.
                 console.log(`**** Call failed: ${err}`);
-                this.setRunning(false);
             });
     }
     /**
@@ -1765,7 +1736,6 @@ export class App extends BaseApp {
                         observer.disconnect();
                         rowelem.remove();
                         // Request the UI to jump to the next entry in the list.
-                        this.setRunning(true);
                         this.onshape
                             .OnshapeRequest(info.next, BTGlobalTreeNodesInfoFromJSON)
                             .then((res: BTGlobalTreeNodesInfo) => {
@@ -1777,7 +1747,6 @@ export class App extends BaseApp {
             );
             observer.observe(rowelem);
         }
-        this.setRunning(false);
     }
     /**
      * Navigate into a folder and populate the UI with the contents
@@ -1794,11 +1763,7 @@ export class App extends BaseApp {
         // so just ignore the call here
         this.hidePopup();
 
-        if (this.running) {
-            return;
-        }
         // Note that we are running and reset the count of entries we have gotten
-        this.setRunning(true);
         this.loaded = 0;
 
         // Clean up the UI so we can populate it with new entries
@@ -1828,7 +1793,6 @@ export class App extends BaseApp {
                 .catch((err) => {
                     // Something went wrong, some mark us as no longer running.
                     console.log(`**** Call failed: ${err}`);
-                    this.setRunning(false);
                 });
         } else {
             this.onshape.globalTreeNodesApi
@@ -1848,7 +1812,6 @@ export class App extends BaseApp {
                 .catch((err) => {
                     // Something went wrong, some mark us as no longer running.
                     console.log(`**** Call failed: ${err}`);
-                    this.setRunning(false);
                 });
         }
     }
