@@ -1,7 +1,9 @@
 # onshape_oauthexample
 Onshape Example Client using PHP
 
-This example shows how to create an Onshape client with a PHP backend (basically no server) and OAuth authentication.  All of the backend support is handled by simple PHP LAMHDAs.  To use this you need to
+This example shows how to create an Onshape client with a PHP backend (basically no significant server) and [OAuth authentication](https://onshape-public.github.io/docs/3-api-development/oauth/).  All of the backend support is handled by simple PHP LAMHDAs.  To use this you need to
+
+## Initial setup
 
 1. Clone/fork the repository to your own machine to edit
 1. Identify a server where the minimal backend components will be hosted.  For purposes of this example, we shall assume that they are at https://ftconshape.com/oauthexample/
@@ -17,9 +19,18 @@ This example shows how to create an Onshape client with a PHP backend (basically
    ```
     public myserver = 'https://ftconshape.com/oauthexample';
     ```     
-1. Do a `npm run build` 
-1. Copy the files from the `dist` directory (don't forget the `.htaccess` files) to your server.
+1. Edit the example_ftpdeploy.js file and save it as .ftpdeploy.js putting in your credentials for FTPing files to the server
+1. Do a `npm run build` to ensure everything builds properly
+
+## Normal Development
+
+1. Once you are happy, you can do an `npm run deploy` to automatically copy all of the files to your server.
+1. As a convenince you can also do `npm run deploy-dev` to build and deploy the development version of the code or `npm run deploy-prod` to deploy the production (mininized) version.
 
 If you have done everything right, when you add the application to your account, you should see an icon appear on the right hand edge of the screen (along with the configuration and appearance icons).  When you click on it, it may promopt you for permissions and then once it has been granted will show a dump of all the files you have shared with you.
 
 To make change so the application, edit the `app/app.ts` file.  It is built on top of the `app/baseapp.ts` file which has all the common routines.
+
+## Calling Onshape APIs
+
+All of the Onshape APIs are available via `this.onshape`.  Onshape has a [REST API EXPLORER](https://cad.onshape.com/glassworks/explorer/) explorer that you can view all of the calls and search them.  All of the APIs are made available as Typescript interfaces at through [onshape-typescript-fetch](https://github.com/toebes/onshape-typescript-fetch).  You can [find documentation here](https://toebes.github.io/onshape-typescript-fetch/).  
