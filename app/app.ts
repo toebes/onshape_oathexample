@@ -37,22 +37,33 @@ import {
     BTInsertablesListResponse,
     BTInsertablesListResponseFromJSON,
     BTMIndividualQuery138,
+    BTMParameter1,
+    BTMParameterBoolean144,
     BTMParameterDerived864,
+    BTMParameterEnum145,
+    BTMParameterQuantity147,
     BTMParameterQueryList148,
+    BTMParameterReferenceWithConfiguration3028,
+    BTMParameterString149,
     GBTElementType,
     GetInsertablesRequest,
+    GetWMVEPsMetadataWvmEnum,
 } from 'onshape-typescript-fetch';
 import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
 import { JTTable } from './common/jttable';
 import { classListAdd, createDocumentElement, waitForTooltip } from './common/htmldom';
 import { genEnumOption } from './components/configurationoptions';
-
 export interface magicIconInfo {
     label: string;
     icon: OnshapeSVGIcon;
     hideFromMenu?: boolean;
 }
 
+export interface configInfo {
+    type: string;
+    id: string;
+    value: string;
+}
 // Things to do in order to be basically complete:
 // * Implement scrolling (preferrably virtual) for items that don't fit on the screen
 // * Implement dialog for selcting a configurable item
@@ -74,7 +85,8 @@ export class App extends BaseApp {
         documentId: string,
         workspaceId: string,
         elementId: string,
-        item: BTInsertableInfo
+        item: BTInsertableInfo,
+        configList: configInfo[]
     ) => void = this.insertToOther;
 
     public magicInfo: { [item: string]: magicIconInfo } = {
@@ -547,7 +559,7 @@ export class App extends BaseApp {
                 img.classList.add('os-thumbnail-image');
                 img.setAttribute('draggable', 'false');
                 img.setAttribute('alt', 'Thumbnail image for a document.');
-                img.ondragstart = (ev) => {
+                img.ondragstart = (_ev) => {
                     return false;
                 };
             }
@@ -798,15 +810,19 @@ export class App extends BaseApp {
         item: BTDocumentSummaryInfo,
         insertType: GBTElementType
     ): Promise<BTInsertableInfo[]> {
-        return new Promise(async (resolve, reject) => {
+        return new Promise(async (resolve, _reject) => {
+            let versionId: string = undefined;
+            if (item.recentVersion !== null && item.recentVersion !== undefined) {
+                versionId = item.recentVersion.id;
+            }
             // If item.defaultWorkspace is empty or item.defaultWorkspace.id is null then we need to
             // call https://cad.onshape.com/glassworks/explorer/#/Document/getDocumentWorkspaces to get a workspace
             // for now we will assume it is always provided
             let wv = 'w';
             let wvid = '';
-            if (item.recentVersion !== null && item.recentVersion !== undefined) {
+            if (versionId !== undefined) {
                 wv = 'v';
-                wvid = item.recentVersion.id;
+                wvid = versionId;
             } else if (
                 item.defaultWorkspace !== null &&
                 item.defaultWorkspace !== undefined
@@ -814,8 +830,6 @@ export class App extends BaseApp {
                 wv = 'w';
                 wvid = item.defaultWorkspace.id;
             }
-            // getInsertables
-            // /documents/d/{did}/{wv}/{wvid}/insertables"
             const parameters: GetInsertablesRequest = {
                 did: item.id,
                 wv: wv,
@@ -911,39 +925,138 @@ export class App extends BaseApp {
         });
     }
     /**
+     *
+     * @param item Item to be checked for a version
+     * @returns Updated document Summary with version identified
+     */
+    public resolveDocumentVersion(
+        item: BTDocumentSummaryInfo
+    ): Promise<BTDocumentSummaryInfo> {
+        return new Promise((resolve, reject) => {
+            // If we have a version in it, we can just resolve to use it
+            if (
+                item.recentVersion !== null &&
+                item.recentVersion !== undefined &&
+                item.recentVersion.id !== null &&
+                item.recentVersion.id !== undefined
+            ) {
+                resolve(item);
+            }
+            this.onshape.documentApi
+                .getDocumentVersions({ did: item.id })
+                .then((versions) => {
+                    if (versions.length > 0) {
+                        const versionId = versions[versions.length - 1].id;
+                        if (
+                            item.recentVersion === undefined ||
+                            item.recentVersion === null
+                        ) {
+                            item.recentVersion = { id: versionId };
+                        } else {
+                            item.recentVersion.id = versionId;
+                        }
+                    }
+                    resolve(item);
+                })
+                .catch((err) => reject(err));
+        });
+    }
+
+    /**
      * Check if an item can be inserted or if we have to prompt the user for more choices.
      * @param item Item to check
      */
-    public checkInsertItem(item: BTDocumentSummaryInfo): void {
-        this.hidePopup();
-        this.getInsertChoices(item, this.targetDocumentElementInfo.elementType).then(
-            (res) => {
-                if (res.length === 0) {
-                    // Nothing was insertable at all, so we just need to let them know that
-                    alert('Nothing is insertable from this document');
-                } else if (res.length === 1) {
-                    if (
-                        res[0].configurationParameters !== undefined &&
-                        res[0].configurationParameters !== null
-                    ) {
-                        this.showItemChoices(item, res);
+    public checkInsertItem(itemRaw: BTDocumentSummaryInfo): void {
+        this.resolveDocumentVersion(itemRaw).then((item) => {
+            this.getInsertChoices(item, this.targetDocumentElementInfo.elementType).then(
+                (res) => {
+                    if (res.length === 0) {
+                        // Nothing was insertable at all, so we just need to let them know that
+                        alert('Nothing is insertable from this document');
+                    } else if (res.length === 1) {
+                        if (
+                            res[0].configurationParameters !== undefined &&
+                            res[0].configurationParameters !== null
+                        ) {
+                            this.showItemChoices(item, res);
+                        } else {
+                            // Perform an actual insert of an item. Note that we already know if we are
+                            // going into a part studio or an assembly.
+                            this.insertToTarget(
+                                this.documentId,
+                                this.workspaceId,
+                                this.elementId,
+                                res[0],
+                                undefined
+                            );
+                        }
                     } else {
-                        // Perform an actual insert of an item. Note that we already know if we are
-                        // going into a part studio or an assembly.
-                        this.insertToTarget(
-                            this.documentId,
-                            this.workspaceId,
-                            this.elementId,
-                            res[0]
-                        );
+                        console.log(`${res.length} choices found`);
+                        this.showItemChoices(item, res);
                     }
-                } else {
-                    console.log(`${res.length} choices found`);
-                    this.showItemChoices(item, res);
+                    //console.log(res);
                 }
-                //console.log(res);
+            );
+        });
+    }
+
+    public getConfigValues(index: number): configInfo[] {
+        const collection = document.getElementsByClassName(`cv${index}`);
+        // const plist:BTMParameterReferenceWithConfiguration3028 = undefined;
+
+        const result: configInfo[] = [];
+
+        Array.from(collection).forEach((element) => {
+            const elemtype = element.getAttribute('data-type');
+            const inputelem: HTMLInputElement =
+                element instanceof HTMLInputElement
+                    ? (element as HTMLInputElement)
+                    : undefined;
+            const selectelem: HTMLSelectElement =
+                element instanceof HTMLSelectElement
+                    ? (element as HTMLSelectElement)
+                    : undefined;
+            switch (elemtype) {
+                case 'quantity': {
+                    const expression = inputelem ? inputelem.value.replace('+', ' ') : ''; // TODO: Why did they do this???
+                    result.push({
+                        type: 'BTMParameterQuantity-147',
+                        id: element.id,
+                        value: expression,
+                    });
+                    break;
+                }
+                case 'string': {
+                    result.push({
+                        type: 'BTMParameterString-149',
+                        id: element.id,
+                        value: inputelem ? inputelem.value : '',
+                    });
+                    break;
+                }
+                case 'enum': {
+                    result.push({
+                        type: 'BTMParameterEnum-145',
+                        id: element.id,
+                        value: selectelem ? selectelem.value : '',
+                    });
+                    break;
+                }
+                case 'boolean': {
+                    result.push({
+                        type: 'BTMParameterBoolean-144',
+                        id: element.id,
+                        value: inputelem
+                            ? inputelem.checked
+                                ? 'true'
+                                : 'false'
+                            : 'false',
+                    });
+                    break;
+                }
             }
-        );
+        });
+        return result;
     }
     /**
      * Show options for a configurable item to insert
@@ -1042,14 +1155,19 @@ export class App extends BaseApp {
         uiDiv.appendChild(itemTreeDiv);
 
         // Start the process off with the first in the magic list
-        for (const item of items) {
+        items.map(async (item: BTInsertableInfo, index: number) => {
             let configurable = false;
             if (
                 item.configurationParameters !== undefined &&
                 item.configurationParameters !== null
             ) {
                 configurable = true;
-                await this.outputConfigurationOptions(item, itemParentGroup);
+
+                item = await this.outputConfigurationOptions(
+                    item,
+                    index,
+                    itemParentGroup
+                );
             }
             // Now we need to output the actual item.
             const childContainerDiv = createDocumentElement('div', {
@@ -1073,15 +1191,18 @@ export class App extends BaseApp {
 
             if (configurable) {
                 childContainerDiv.onclick = () => {
+                    const configValues = this.getConfigValues(index);
                     console.log(
                         'Need to figure out configuration options settings.. But going to run it anyway'
                     );
                     console.log(item);
+                    console.log(configValues);
                     this.insertToTarget(
                         this.documentId,
                         this.workspaceId,
                         this.elementId,
-                        item
+                        item,
+                        configValues
                     );
                 };
             } else {
@@ -1090,54 +1211,138 @@ export class App extends BaseApp {
                         this.documentId,
                         this.workspaceId,
                         this.elementId,
-                        item
+                        item,
+                        undefined
                     );
                 };
             }
 
             itemParentGroup.append(childContainerDiv);
-        }
+        });
+        //}
     }
-    /////----------------------------
-
-    /////----------------------------
+    /**
+     * In order to insert a configured part, we need the part id.  For this we will look at the metadata
+     * to find a part which has the same name as the one we are looking for.
+     * Note that if it isn't a part, we can get out of here without doing any real work.  Otherwise
+     * we will have to go back to Onshape to get the
+     * @param item to look for.
+     * @returns BTInsertableInfo with deterministicId filled in
+     */
+    public async findDeterministicPartId(
+        item: BTInsertableInfo
+    ): Promise<BTInsertableInfo> {
+        return new Promise((resolve, _reject) => {
+            // Make sure we have to do some work (if it isn't a part or we already know the id, get out of here)
+            if (
+                item.elementType !== 'PARTSTUDIO' ||
+                (item.deterministicId !== undefined && item.deterministicId !== null)
+            ) {
+                console.log('findDeterminsticPartId Early Out');
+                resolve(item);
+            }
+            // We have to retrieve the metadata, so figure out what version / workspace we want to ask for
+            let wvm: GetWMVEPsMetadataWvmEnum = 'v';
+            let wvmid = item.versionId ?? undefined;
+            if (wvmid === undefined) {
+                wvm = 'w';
+                wvmid = item.workspaceId;
+            }
+            this.onshape.metadataApi
+                .getWMVEPsMetadata({
+                    did: item.documentId,
+                    wvm: wvm,
+                    wvmid: wvmid,
+                    eid: item.elementId,
+                })
+                .then((metadata) => {
+                    // Check the easy case - if there is only one item, then we can assume that it is the partid we are looking for
+                    if (metadata.items.length === 1) {
+                        item.deterministicId = metadata.items[0].partId;
+                    } else {
+                        // We need to go through all the metadata items and find one which has the name which is the same
+                        // as our current item
+                        const namedItem = metadata.items.find((metaItem) => {
+                            const nameItem = metaItem.properties.find((prop) => {
+                                return prop.name === 'Name';
+                            });
+                            return (
+                                nameItem !== undefined &&
+                                nameItem.value === item.elementName
+                            );
+                        });
+                        // Searching is done.  If we found it, fill it in, otherwise complain loudly.
+                        if (namedItem !== undefined) {
+                            item.deterministicId = namedItem.partId;
+                        } else {
+                            // We can log the error, but just go on and let the application run without
+                            // a deterministicId.  Eventually the insert will fail and it will be caught by
+                            // the UI instead of rejecting it.
+                            console.log(
+                                `****Unable to find deterministicId - multiple metadata items ${metadata.items.length}`
+                            );
+                        }
+                    }
+                    console.log('findDeterminsticPartId Complete');
+                    resolve(item);
+                });
+        });
+    }
     /**
      * Display the configuration options for an element
      * @param item Configurable element to output
      * @param itemParentGroup Location to put the configuration option
      */
-    public async outputConfigurationOptions(
+    public outputConfigurationOptions(
         item: BTInsertableInfo,
+        index: number,
         itemParentGroup: HTMLElement
-    ) {
-        let wvm = 'v';
-        let wvmid = item.versionId ?? undefined;
-        if (wvmid === undefined) {
-            wvm = 'w';
-            wvmid = item.workspaceId;
-        }
-        const itemConfig = await this.onshape.elementApi.getConfiguration({
-            did: item.documentId,
-            wvm: wvm,
-            wvmid: wvmid,
-            eid: item.elementId,
+    ): Promise<BTInsertableInfo> {
+        return new Promise((resolve, _reject) => {
+            // We have two pieces of information that we can actually ask for in parallel
+            // First we need to know the deterministic part id if this is a partstudio item
+            const findPartPromise = this.findDeterministicPartId(item);
+            let wvm = 'v';
+            let wvmid = item.versionId ?? undefined;
+            if (wvmid === undefined) {
+                wvm = 'w';
+                wvmid = item.workspaceId;
+            }
+            // Second we need to get all the configuration information for the item
+            const itemConfigPromise = this.onshape.elementApi.getConfiguration({
+                did: item.documentId,
+                wvm: wvm,
+                wvmid: wvmid,
+                eid: item.elementId,
+            });
+            // Run them both in parallel and when they are complete we can do our work
+            Promise.all([findPartPromise, itemConfigPromise]).then(
+                ([item, itemConfig]) => {
+                    console.log('Both promises complete');
+                    let onchange = () => {};
+                    let ongenerate = () => {};
+                    if (itemConfig.configurationParameters.length === 1) {
+                        onchange = () => {
+                            console.log('Single Item Configuration Change');
+                        };
+                    } else {
+                        onchange = () => {
+                            console.log('Multi-item Configuration Change');
+                        };
+                        ongenerate = () => {
+                            console.log('Generate Button Clicked');
+                        };
+                    }
+                    console.log(
+                        `Configuration ${itemConfig.configurationParameters.length} options`
+                    );
+                    itemParentGroup.append(
+                        genEnumOption(itemConfig, index, onchange, ongenerate)
+                    );
+                    resolve(item);
+                }
+            );
         });
-        let onchange = () => {};
-        let ongenerate = () => {};
-        if (itemConfig.configurationParameters.length === 1) {
-            onchange = () => {
-                console.log('Single Iten Configuration click');
-            };
-        } else {
-            onchange = () => {
-                console.log('Multi-item Configuration click');
-            };
-            ongenerate = () => {
-                console.log('Generate Button Clicked');
-            };
-        }
-        console.log(`Configuration ${itemConfig.configurationParameters.length} options`);
-        itemParentGroup.append(genEnumOption(itemConfig, onchange, ongenerate));
     }
     /**
      * Insert to an unknown tab (generally this is an error)
@@ -1150,12 +1355,89 @@ export class App extends BaseApp {
         documentId: string,
         workspaceId: string,
         elementId: string,
-        item: BTInsertableInfo
+        item: BTInsertableInfo,
+        _configList: configInfo[]
     ): void {
         alert(
             `Unable to determine how to insert item ${item.id} - ${item.elementName} into ${this.targetDocumentElementInfo.elementType} ${documentId}/w/${workspaceId}/e/${elementId}`
         );
     }
+    /**
+     * Create the configuration structure for inserting into a part
+     * @param configList List of chosen configurations
+     * @param namespace Namespace to insert from
+     * @returns Array of BTMParameter1 structures for the insert part operation
+     */
+    public buildPartConfiguration(
+        configList: configInfo[],
+        namespace: string
+    ): Array<BTMParameter1> {
+        const result: Array<BTMParameter1> = [];
+
+        configList.forEach((item) => {
+            switch (item.type) {
+                case 'BTMParameterQuantity-147': {
+                    const configItem: BTMParameterQuantity147 = {
+                        btType: item.type,
+                        isInteger: false,
+                        value: 0,
+                        units: '',
+                        expression: item.value,
+                    };
+                    result.push(configItem);
+                    break;
+                }
+                case 'BTMParameterString-149': {
+                    const configItem: BTMParameterString149 = {
+                        btType: item.type,
+                        value: item.value,
+                    };
+                    result.push(configItem);
+                    break;
+                }
+                case 'BTMParameterEnum-145': {
+                    const configItem: BTMParameterEnum145 = {
+                        btType: item.type,
+                        namespace: namespace,
+                        value: item.value,
+                        parameterId: item.id,
+                        enumName: `${item.id}_conf`,
+                    };
+                    result.push(configItem);
+                    break;
+                }
+                case 'BTMParameterBoolean-144': {
+                    const configItem: BTMParameterBoolean144 = {
+                        btType: item.type,
+                        value: item.value === 'true',
+                    };
+                    result.push(configItem);
+                    break;
+                }
+            }
+        });
+        return result;
+    }
+    /**
+     * Create the configuration structure for inserting into an assembly
+     * @param configList List of chosen configurations
+     * @param _namespace Namespace to insert from
+     * @returns Array of BTMParameter1 structures for the insert part operation
+     */
+    public buildAssemblyConfiguration(
+        configList: configInfo[],
+        _namespace: string
+    ): string {
+        let result = '';
+        let extra = '';
+
+        configList.forEach((item) => {
+            result += `${extra}${item.id}=${item.value}`;
+            extra = ';';
+        });
+        return result;
+    }
+
     /**
      * Insert an item into a Parts Studio
      * @param documentId Document to insert into
@@ -1167,7 +1449,8 @@ export class App extends BaseApp {
         documentId: string,
         workspaceId: string,
         elementId: string,
-        item: BTInsertableInfo
+        item: BTInsertableInfo,
+        configList: configInfo[]
     ): void {
         console.log(
             `Inserting item ${item.id} - ${item.elementName} into Part Studio ${documentId}/w/${workspaceId}/e/${elementId}`
@@ -1178,45 +1461,95 @@ export class App extends BaseApp {
         //     "namespace": "",
         //     "name": `Derived ${insertable.name}`,
         //     "suppressed": false,
+        //     "featureType": "importDerived",
+        //     "subFeatures": [],
+        //     "returnAfterSubfeatures": false,
         //     "parameters": [
         //       {
         //         "btType": "BTMParameterQueryList-148",
+        //         "parameterId": "parts",
         //         "queries": [
         //           {
         //             "btType": "BTMIndividualQuery-138",
         //             "queryStatement": null,
         //             "queryString": insertable.type === "PART" ? `query=qTransient("${insertable.partId}");` : "query=qEverything(EntityType.BODY);"
         //           }
-        //         ],
-        //         "parameterId": "parts"
+        //         ]
         //       },
         //       {
         //         "btType": "BTMParameterDerived-864",
-        //         "configuration": configList,
         //         "parameterId": "buildFunction",
         //         "namespace": namespace,
         //         "imports": []
+        //         "configuration": configList,
         //       }
         //     ],
-        //     "featureType": "importDerived",
-        //     "subFeatures": [],
-        //     "returnAfterSubfeatures": false
         //   },
         //   "libraryVersion": 1746,
         //   "microversionSkew": false,
         //   "rejectMicroversionSkew": false,
         //   "serializationVersion": "1.1.23"
-        const namespace = `d${item.documentId}::v${item.versionId}::e${
-            item.elementId
-        }::m${item.microversionId ?? '0'}`;
+
+        // {
+        //     "feature": {
+        //         "btType": "BTMFeature-134",
+        //         "namespace": "",
+        //         "name": "Derived Aluminum Channel (Configurable)",
+        //         "suppressed": false
+        //         "featureType": "importDerived",
+        //         "subFeatures": [],
+        //         "returnAfterSubfeatures": false,
+        //         "parameters": [
+        //             {
+        //                 "btType": "BTMParameterQueryList-148",
+        //                 "parameterId": "parts",
+        //                 "queries": [
+        //                     {
+        //                         "btType": "BTMIndividualQuery-138",
+        //                         "queryStatement": null
+        //                         "queryString": "query=qEverything(EntityType.BODY);",
+        //                     }
+        //                 ]
+        //             },
+        //             {
+        //                 "btType": "BTMParameterDerived-864",
+        //                 "parameterId": "buildFunction",
+        //                 "namespace": "d69cc1cee1ec6c1886445462a::vundefined::e0b4fa2e54db3ebd11d3f072c::mf600d9e3b5579fb00fbc0ccf",
+        //                 "configuration": [
+        //                     {
+        //                         "btType": "BTMParameterEnum-145",
+        //                         "enumName": "List_rQUjcTCrGVekld_conf",
+        //                         "namespace": "d69cc1cee1ec6c1886445462a::vundefined::e0b4fa2e54db3ebd11d3f072c::mf600d9e3b5579fb00fbc0ccf",
+        //                         "value": "Copy_of_3_00___3_Hole_"
+        //                     }
+        //                 ]
+        //             }
+        //         ],
+        //     },
+        //     "libraryVersion": 1746,
+        //     "microversionSkew": false,
+        //     "rejectMicroversionSkew": false,
+        //     "serializationVersion": "1.1.23"
+        // }
+        const namespace = this.computeNamespace(item);
+
+        let queryString = 'query=qEverything(EntityType.BODY);';
+        if (item.elementType === 'PARTSTUDIO') {
+            if (item.deterministicId !== undefined && item.deterministicId !== null) {
+                queryString = `query=qTransient("${item.deterministicId}");`;
+            } else if (
+                item.insertableQuery !== undefined &&
+                item.insertableQuery !== null
+            ) {
+                queryString = item.insertableQuery;
+            }
+        }
+
         const iquery: BTMIndividualQuery138 = {
             btType: 'BTMIndividualQuery-138',
             queryStatement: null,
             // item.insertableQuery,
-            queryString:
-                item.elementType === 'PARTSTUDIO'
-                    ? `query=qTransient("${item.deterministicId}");` // item.elementId
-                    : 'query=qEverything(EntityType.BODY);', // item.insertableQuery,
+            queryString: queryString,
         };
         const queryList: BTMParameterQueryList148 = {
             btType: 'BTMParameterQueryList-148',
@@ -1228,6 +1561,9 @@ export class App extends BaseApp {
             parameterId: 'buildFunction',
             namespace: namespace,
             imports: [],
+            _configuration: configList
+                ? this.buildPartConfiguration(configList, namespace)
+                : undefined,
         };
         this.onshape.partStudioApi
             .addPartStudioFeature({
@@ -1278,6 +1614,16 @@ export class App extends BaseApp {
                 }
             });
     }
+    public computeNamespace(item: BTInsertableInfo) {
+        let wvid = `w${item.workspaceId}`;
+        if (item.versionId !== undefined && item.versionId !== null) {
+            wvid = `v${item.versionId}`;
+        }
+        let mvid = `m${item.microversionId ?? '0'}`;
+
+        return `d${item.documentId}::${wvid}::e${item.elementId}::${mvid}`;
+    }
+
     /**
      * Insert an item into an Assembly
      * @param documentId Document to insert into
@@ -1289,7 +1635,8 @@ export class App extends BaseApp {
         documentId: string,
         workspaceId: string,
         elementId: string,
-        item: BTInsertableInfo
+        item: BTInsertableInfo,
+        configList: configInfo[]
     ): void {
         console.log(
             `Inserting item ${item.id} - ${item.elementName} into Assembly ${documentId}/w/${workspaceId}/e/${elementId}`
@@ -1303,7 +1650,9 @@ export class App extends BaseApp {
                 wid: workspaceId,
                 eid: elementId,
                 bTAssemblyInstanceDefinitionParams: {
-                    _configuration: item._configuration,
+                    _configuration: configList
+                        ? this.buildAssemblyConfiguration(configList, '')
+                        : undefined,
                     documentId: item.documentId,
                     elementId: item.elementId,
                     featureId: '', // item.featureId,

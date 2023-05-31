@@ -44,7 +44,7 @@ import { JSXFactory } from '../common/factory';
 //         },
 
 export const OptString = (props) => {
-    const { value, onchange } = props;
+    const { value, index, onchange } = props;
     const optString = value as BTMConfigurationParameterString872;
     return (
         <os-string-parameter>
@@ -54,8 +54,12 @@ export const OptString = (props) => {
             >
                 <label class="os-param-label">{optString.parameterName}</label>
                 <input
-                    class="os-param-text ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item"
+                    class={
+                        'os-param-text ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item cv' +
+                        index
+                    }
                     type="text"
+                    data-type="string"
                     autocomplete={optString.nodeId}
                     placeholder=""
                     value={optString.defaultValue}

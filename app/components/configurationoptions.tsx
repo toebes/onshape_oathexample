@@ -40,6 +40,7 @@ import { OptString } from './optionstring';
 
 export function genEnumOption(
     itemConfig: BTConfigurationResponse2019,
+    index: number,
     onchange?: (e: any) => any,
     ongenerate?: (e: any) => any
 ) {
@@ -59,17 +60,20 @@ export function genEnumOption(
                                         value={
                                             opt as BTMConfigurationParameterBoolean2550
                                         }
+                                        index={index}
                                         onchange={onchange}
                                     />
                                 ) : opt.btType === 'BTMConfigurationParameterEnum-105' ? (
                                     <OptEnum
                                         value={opt as BTMConfigurationParameterEnum105}
+                                        index={index}
                                         onchange={onchange}
                                     />
                                 ) : opt.btType ===
                                   'BTMConfigurationParameterString-872' ? (
                                     <OptString
                                         value={opt as BTMConfigurationParameterString872}
+                                        index={index}
                                         onchange={onchange}
                                     />
                                 ) : opt.btType ===
@@ -78,6 +82,7 @@ export function genEnumOption(
                                         value={
                                             opt as BTMConfigurationParameterQuantity1826
                                         }
+                                        index={index}
                                         onchange={onchange}
                                     />
                                 ) : (

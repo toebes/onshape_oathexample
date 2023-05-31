@@ -99,7 +99,7 @@ import { JSXFactory } from '../common/factory';
 //         }
 
 export const OptEnum = (props) => {
-    const { value, onchange } = props;
+    const { value, index, onchange } = props;
     const optEnum = value as BTMConfigurationParameterEnum105;
 
     return (
@@ -113,6 +113,8 @@ export const OptEnum = (props) => {
                         <select
                             id={optEnum.parameterId}
                             style="border:none; width:100%"
+                            class={'cv' + index}
+                            data-type="enum"
                             onchange={onchange}
                         >
                             {optEnum.options.map((enumopt) => (

@@ -44,7 +44,7 @@ import { JSXFactory } from '../common/factory';
 //         },
 
 export const OptBool = (props) => {
-    const { value, onchange } = props;
+    const { value, index, onchange } = props;
     const optBool = value as BTMConfigurationParameterBoolean2550;
     {
         return (
@@ -60,8 +60,12 @@ export const OptBool = (props) => {
                         data-bs-placement="right"
                     >
                         <input
-                            class="os-param-checkbox-input ng-pristine ng-untouched ng-valid ng-not-empty"
+                            class={
+                                'os-param-checkbox-input ng-pristine ng-untouched ng-valid ng-not-empty cv' +
+                                index
+                            }
                             type="checkbox"
+                            data-type="boolean"
                             data-parameter-value="true"
                             onchange={onchange}
                             checked={optBool.defaultValue}

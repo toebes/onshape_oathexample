@@ -211,7 +211,7 @@ import { JSXFactory } from '../common/factory';
 //         },
 
 export const OptQuantity = (props) => {
-    const { value, onchange } = props;
+    const { value, index, onchange } = props;
     const optQuantity = value as BTMConfigurationParameterQuantity1826;
 
     const initialValue =
@@ -237,7 +237,11 @@ export const OptQuantity = (props) => {
                     is-open="$ctrl.btParameter.isAutocompleteOpen"
                 >
                     <input
-                        class="os-param-number dropdown-source ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item"
+                        class={
+                            'os-param-number dropdown-source ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item cv' +
+                            index
+                        }
+                        data-type="quantity"
                         type="text"
                         autocomplete="off"
                         value={initialValue}
