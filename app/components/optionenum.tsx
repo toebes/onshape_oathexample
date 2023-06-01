@@ -111,7 +111,7 @@ export const OptEnum = (props) => {
                 <div class="os-select-container os-select-bootstrap dropdown ng-not-empty ng-valid">
                     <span class="os-select-match-text float-start">
                         <select
-                            id={optEnum.parameterId}
+                            data-id={optEnum.parameterId}
                             style="border:none; width:100%"
                             class={'cv' + index}
                             data-type="enum"

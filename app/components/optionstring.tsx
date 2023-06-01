@@ -58,6 +58,7 @@ export const OptString = (props) => {
                         'os-param-text ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item cv' +
                         index
                     }
+                    data-id={optString.parameterId}
                     type="text"
                     data-type="string"
                     autocomplete={optString.nodeId}

@@ -71,6 +71,7 @@ import {
     VersionApi,
     WebhookApi,
     WorkflowApi,
+    BTThumbnailInfo,
 } from 'onshape-typescript-fetch';
 import { createDocumentElement } from './common/htmldom';
 
@@ -80,6 +81,7 @@ type createThumbnailOptions = {
     height?: number;
     retry?: boolean;
     retryInterval?: number;
+    id?: string;
 };
 
 // A function to notify in the case of catastrophic failure
@@ -212,10 +214,7 @@ export class OnshapeAPI {
         xhr.onreadystatechange = function () {
             if (xhr.readyState === 4 && xhr.status === 200) {
                 const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(
-                    xhr.responseText,
-                    'text/xml'
-                );
+                const xmlDoc = parser.parseFromString(xhr.responseText, 'text/xml');
             }
         };
         xhr.send();
@@ -272,9 +271,7 @@ export class OnshapeAPI {
             ExchangeToken(this.myserver + '/oauth.php', redirect_uri, this.code)
                 .then((v: IExchangeToken) => {
                     const now = new Date();
-                    const expires = new Date(
-                        now.getTime() + v.expires_in * 1000
-                    );
+                    const expires = new Date(now.getTime() + v.expires_in * 1000);
                     this.initAPIs(v.access_token, v.refresh_token, expires);
                     resolve();
                 })
@@ -289,11 +286,7 @@ export class OnshapeAPI {
      * @param refresh_token Refresh token needed if the Access Token has to be refreshed
      * @param expires Time when the token expires and needs to be updated
      */
-    public initAPIs(
-        access_token: string,
-        refresh_token: string,
-        expires: Date
-    ) {
+    public initAPIs(access_token: string, refresh_token: string, expires: Date) {
         // We want to strip off everything before the /api/
         const apipos = runtime.BASE_PATH.lastIndexOf('/api/');
         this.baseserver = runtime.BASE_PATH.substring(0, apipos);
@@ -307,10 +300,7 @@ export class OnshapeAPI {
 
         const uriconfigparams: runtime.ConfigurationParameters = {
             basePath: myserver, // override base path
-            accessToken: (
-                name?: string,
-                scopes?: string[]
-            ): Promise<string> => {
+            accessToken: (name?: string, scopes?: string[]): Promise<string> => {
                 return this.getAccessToken();
             },
             headers: { 'X-Server': this.server },
@@ -336,9 +326,7 @@ export class OnshapeAPI {
         this.apiApplicationApi = new APIApplicationApi(this.configuration);
         this.accountApi = new AccountApi(this.configuration);
         this.aliasApi = new AliasApi(this.configuration);
-        this.appAssociativeDataApi = new AppAssociativeDataApi(
-            this.configuration
-        );
+        this.appAssociativeDataApi = new AppAssociativeDataApi(this.configuration);
         this.appElementApi = new AppElementApi(this.configuration);
         this.assemblyApi = new AssemblyApi(this.configuration);
         this.billingApi = new BillingApi(this.configuration);
@@ -390,10 +378,7 @@ export class OnshapeAPI {
 
             const url = this.myserver + this.fixOnshapeURI(urlReq);
             xhr.open('GET', url, true);
-            xhr.setRequestHeader(
-                'Authorization',
-                'Bearer ' + this.access_token
-            );
+            xhr.setRequestHeader('Authorization', 'Bearer ' + this.access_token);
             xhr.setRequestHeader('X-Server', this.server);
             xhr.setRequestHeader(
                 'Accept',
@@ -407,7 +392,8 @@ export class OnshapeAPI {
                     if (xhr.status === 200) {
                         if (
                             xhr.response.size === 0 ||
-                            xhr.response.type === 'text/xml'
+                            xhr.response.type === 'text/xml' ||
+                            xhr.response.type === 'application/json'
                         ) {
                             reject('Not Found');
                         } else {
@@ -440,25 +426,31 @@ export class OnshapeAPI {
         item: BTDocumentSummaryInfo,
         options?: createThumbnailOptions
     ): HTMLElement {
-        let height = 40,
+        const {
+            height = 40,
             width = 70,
             retry = false,
-            retryInterval = 1;
-        // Override any defaults
-        if (options !== undefined) {
-            if (options.height !== undefined) {
-                height = options.height;
-            }
-            if (options.width !== undefined) {
-                width = options.width;
-            }
-            if (options.retry !== undefined) {
-                retry = options.retry;
-            }
-            if (options.retryInterval !== undefined) {
-                retryInterval = options.retryInterval;
-            }
-        }
+            retryInterval = 2,
+            id = undefined,
+        } = options || {};
+        // // Override any defaults
+        // if (options !== undefined) {
+        //     if (options.height !== undefined) {
+        //         height = options.height;
+        //     }
+        //     if (options.width !== undefined) {
+        //         width = options.width;
+        //     }
+        //     if (options.retry !== undefined) {
+        //         retry = options.retry;
+        //     }
+        //     if (options.retryInterval !== undefined) {
+        //         retryInterval = options.retryInterval;
+        //     }
+        //     if (options.id !== undefined) {
+        //         id = options.id;
+        //     }
+        // }
         const targetsize = `${width}x${height}`;
         let verPart = '';
         if (
@@ -484,11 +476,15 @@ export class OnshapeAPI {
                 }
             }
         }
+        // if (retry) {
+        //     imageURL += '&rejectEmpty=true';
+        // }
         const imgChildThumbnail = createDocumentElement('img', {
             src: 'https://cad.onshape.com/images/default-document.png',
             width: String(width),
             height: String(height),
-        });
+            id: id,
+        }) as HTMLImageElement;
 
         this.getThumbnail(imageURL)
             .then((src) => {
@@ -496,13 +492,90 @@ export class OnshapeAPI {
             })
             .catch((err) => {
                 if (retry) {
-                    setTimeout(() => {
-                        // TODO: Figure out how to cleanly rerun the operation without getting heavily recursive.
-                    }, 1000 * retryInterval);
+                    this.retryThumbnail(imgChildThumbnail, imageURL, retryInterval, 20);
                 }
             });
         return imgChildThumbnail;
     }
+    /**
+     * Attempt to reload an image for a period of time.
+     * @param elem Element to update image on
+     * @param imageURL URL for image to load
+     * @param interval Interval to wait
+     * @param retries Maximum number of times to retry the image
+     */
+    public retryThumbnail(
+        elem: HTMLImageElement,
+        imageURL: string,
+        interval: number,
+        retries: number
+    ) {
+        retries--;
+        if (retries > 0 && elem.isConnected) {
+            setTimeout(() => {
+                this.getThumbnail(imageURL)
+                    .then((src) => {
+                        elem.setAttribute('src', src);
+                    })
+                    .catch((err) => {
+                        this.retryThumbnail(elem, imageURL, interval, retries);
+                    });
+            }, 1000 * interval);
+        }
+    }
+    /**
+     *
+     * @param elem Element to update image on
+     * @param thumbnail Thumbnail information
+     * @param options Options to control the display
+     *                height (default 40) is height of the image to request
+     *                width (default 70) is the width of the image to request
+     *                retry indicates that we should retry the image if it isn't found
+     *                retryInterval (default 2) is how frequently in seconds we should retry to get the image
+     */
+    public replaceThumbnailImage(
+        elem: HTMLImageElement,
+        thumbnail: BTThumbnailInfo,
+        options?: createThumbnailOptions
+    ): void {
+        const {
+            height = 40,
+            width = 70,
+            retry = false,
+            retryInterval = 2,
+            id = undefined,
+        } = options || {};
+        const targetsize = `${width}x${height}`;
+
+        if (thumbnail !== undefined && thumbnail !== null) {
+            let imageURL = '';
+            // We have a potential thumbnail URI we can work from
+            // See if we can find a URI that matches
+            for (let thumbnailInfo of thumbnail.sizes) {
+                if (
+                    thumbnailInfo.size === targetsize &&
+                    thumbnailInfo.href !== undefined &&
+                    thumbnailInfo.href !== null
+                ) {
+                    imageURL = thumbnailInfo.href;
+                    break;
+                }
+            }
+            // if (retry) {
+            //     imageURL += '&rejectEmpty=true';
+            // }
+            this.getThumbnail(imageURL)
+                .then((src) => {
+                    elem.setAttribute('src', src);
+                })
+                .catch((_err) => {
+                    if (retry) {
+                        this.retryThumbnail(elem, imageURL, retryInterval, 20);
+                    }
+                });
+        }
+    }
+
     /**
      *
      * @param uri URI returned from Onshape
@@ -537,8 +610,10 @@ export class OnshapeAPI {
 
         if (this.configuration && this.configuration.accessToken) {
             // oauth required
-            headerParameters['Authorization'] =
-                await this.configuration.accessToken('OAuth2', ['OAuth2Read']);
+            headerParameters['Authorization'] = await this.configuration.accessToken(
+                'OAuth2',
+                ['OAuth2Read']
+            );
         }
 
         if (
@@ -548,11 +623,7 @@ export class OnshapeAPI {
         ) {
             headerParameters['Authorization'] =
                 'Basic ' +
-                btoa(
-                    this.configuration.username +
-                        ':' +
-                        this.configuration.password
-                );
+                btoa(this.configuration.username + ':' + this.configuration.password);
         }
 
         const response = await this.urlAPI.request({

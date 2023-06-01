@@ -44,6 +44,7 @@ import {
     BTMParameterQuantity147,
     BTMParameterQueryList148,
     BTMParameterString149,
+    BTThumbnailInfo,
     GBTElementType,
     GetInsertablesRequest,
     GetWMVEPsMetadataWvmEnum,
@@ -63,14 +64,20 @@ export interface configInfo {
     id: string;
     value: string;
 }
-// Things to do in order to be basically complete:
-// * Implement scrolling (preferrably virtual) for items that don't fit on the screen
-// * Implement dialog for selcting a configurable item
-// * Implement dialog for selection more than one element for an item
-// * Distinguish between configured item vs configurable item
-// * Implement hover-over to show additional information
-// * Teams doesn't put the teams icon in the breadcrumbs (is it possible?)
-// * After changing a configuration, if the image doesn't get updated (not available), set a timer and retry it
+
+export interface configInsertInfo {
+    configList: configInfo[];
+    deterministicId?: string;
+    libraryVersion?: number;
+    microversionSkew?: boolean;
+    rejectMicroversionSkew?: boolean;
+    serializationVersion?: string;
+    sourceMicroversion?: string;
+}
+
+export interface metaData {
+    [key: string]: any;
+}
 
 export class App extends BaseApp {
     public myserver = 'https://ftconshape.com/oauthexample';
@@ -84,7 +91,7 @@ export class App extends BaseApp {
         workspaceId: string,
         elementId: string,
         item: BTInsertableInfo,
-        configList: configInfo[]
+        insertInfo: configInsertInfo
     ) => void = this.insertToOther;
 
     public magicInfo: { [item: string]: magicIconInfo } = {
@@ -972,10 +979,8 @@ export class App extends BaseApp {
                             );
                         }
                     } else {
-                        console.log(`${res.length} choices found`);
                         this.showItemChoices(item, res);
                     }
-                    //console.log(res);
                 }
             );
         });
@@ -989,6 +994,7 @@ export class App extends BaseApp {
 
         Array.from(collection).forEach((element) => {
             const elemtype = element.getAttribute('data-type');
+            const elemid = element.getAttribute('data-id');
             const inputelem: HTMLInputElement =
                 element instanceof HTMLInputElement
                     ? (element as HTMLInputElement)
@@ -1002,7 +1008,7 @@ export class App extends BaseApp {
                     const expression = inputelem ? inputelem.value.replace('+', ' ') : ''; // TODO: Why did they do this???
                     result.push({
                         type: 'BTMParameterQuantity-147',
-                        id: element.id,
+                        id: elemid,
                         value: expression,
                     });
                     break;
@@ -1010,7 +1016,7 @@ export class App extends BaseApp {
                 case 'string': {
                     result.push({
                         type: 'BTMParameterString-149',
-                        id: element.id,
+                        id: elemid,
                         value: inputelem ? inputelem.value : '',
                     });
                     break;
@@ -1018,7 +1024,7 @@ export class App extends BaseApp {
                 case 'enum': {
                     result.push({
                         type: 'BTMParameterEnum-145',
-                        id: element.id,
+                        id: elemid,
                         value: selectelem ? selectelem.value : '',
                     });
                     break;
@@ -1026,7 +1032,7 @@ export class App extends BaseApp {
                 case 'boolean': {
                     result.push({
                         type: 'BTMParameterBoolean-144',
-                        id: element.id,
+                        id: elemid,
                         value: inputelem
                             ? inputelem.checked
                                 ? 'true'
@@ -1135,6 +1141,7 @@ export class App extends BaseApp {
 
         itemParentRow.append(divParentTitle);
         uiDiv.appendChild(itemTreeDiv);
+        let insertInfo: configInsertInfo = undefined;
 
         // Start the process off with the first in the magic list
         items.map(async (item: BTInsertableInfo, index: number) => {
@@ -1145,7 +1152,7 @@ export class App extends BaseApp {
             ) {
                 configurable = true;
 
-                item = await this.outputConfigurationOptions(
+                insertInfo = await this.outputConfigurationOptions(
                     item,
                     index,
                     itemParentGroup
@@ -1161,10 +1168,13 @@ export class App extends BaseApp {
             const childThumbnailDiv = createDocumentElement('div', {
                 class: 'select-item-dialog-thumbnail-container os-no-shrink',
             });
-            const imgChildThumbnail = this.onshape.createThumbnailImage(parent);
+            const imgChildThumbnail = this.onshape.createThumbnailImage(parent, {
+                id: `ci${index}`,
+            });
             childThumbnailDiv.append(imgChildThumbnail);
             const childNameDiv = createDocumentElement('div', {
                 class: 'select-item-dialog-item-name',
+                id: `ct${index}`,
                 textContent: item.elementName,
             });
             dialogItemDiv.append(childThumbnailDiv);
@@ -1173,13 +1183,13 @@ export class App extends BaseApp {
 
             if (configurable) {
                 childContainerDiv.onclick = () => {
-                    const configValues = this.getConfigValues(index);
+                    insertInfo.configList = this.getConfigValues(index);
                     this.insertToTarget(
                         this.documentId,
                         this.workspaceId,
                         this.elementId,
                         item,
-                        configValues
+                        insertInfo
                     );
                 };
             } else {
@@ -1265,6 +1275,75 @@ export class App extends BaseApp {
         });
     }
     /**
+     * In order to insert a configured part, we need the part id.  For this we will look at the metadata
+     * to find a part which has the same name as the one we are looking for.
+     * Note that if it isn't a part, we can get out of here without doing any real work.  Otherwise
+     * we will have to go back to Onshape to get the
+     * @param item to look for.
+     * @returns BTInsertableInfo with deterministicId filled in
+     */
+    public async getMetaData(
+        item: BTInsertableInfo,
+        configuration: string
+    ): Promise<metaData> {
+        return new Promise((resolve, _reject) => {
+            // We have to retrieve the metadata, so figure out what version / workspace we want to ask for
+            let wvm: GetWMVEPsMetadataWvmEnum = 'v';
+            let wvmid = item.versionId ?? undefined;
+            if (wvmid === undefined) {
+                wvm = 'w';
+                wvmid = item.workspaceId;
+            }
+            this.onshape.metadataApi
+                .getWMVEPsMetadata({
+                    did: item.documentId,
+                    wvm: wvm,
+                    wvmid: wvmid,
+                    eid: item.elementId,
+                    thumbnail: true,
+                    _configuration: configuration,
+                })
+                .then((metadata) => {
+                    let result: metaData = {};
+                    if (metadata.items.length > 0) {
+                        if (metadata.items.length > 1) {
+                            // Something is wrong, we got more than one item (which shouldn't happen).  Just let them know and ignore the extra items
+                            console.log(
+                                '***getWMVEPsMetadata returned more than one item'
+                            );
+                            console.log(item);
+                            console.log(metadata);
+                        }
+                        const metaItem = metadata.items[0];
+                        result['href'] = metaItem.href;
+                        result['isFlattenedBody'] = metaItem.isFlattenedBody;
+                        //result['isMesh'] = metaItem.isMesh  // TODO: This needs to be in the API
+                        result['jsonType'] = metaItem.jsonType;
+                        result['meshState'] = metaItem.meshState;
+                        result['partId'] = metaItem.partId;
+                        result['partType'] = metaItem.partType;
+                        result['thumbnail'] = metaItem.thumbnail;
+
+                        // Check the easy case - if there is only one item, then we can assume that it is the partid we are looking for
+                        metaItem.properties.forEach((metaIitem) => {
+                            result[metaIitem.name] = metaIitem.value;
+                            if (metaIitem.valueType === 'ENUM') {
+                                let enumEntry = metaIitem.enumValues.find((enumVal) => {
+                                    return enumVal.value === metaIitem.value;
+                                });
+                                if (enumEntry !== undefined) {
+                                    result[metaIitem.name] = enumEntry.label;
+                                }
+                            }
+                        });
+                        item.deterministicId = metaItem.partId;
+                        resolve(result);
+                    }
+                });
+        });
+    }
+
+    /**
      * Display the configuration options for an element
      * @param item Configurable element to output
      * @param itemParentGroup Location to put the configuration option
@@ -1273,7 +1352,7 @@ export class App extends BaseApp {
         item: BTInsertableInfo,
         index: number,
         itemParentGroup: HTMLElement
-    ): Promise<BTInsertableInfo> {
+    ): Promise<configInsertInfo> {
         return new Promise((resolve, _reject) => {
             // We have two pieces of information that we can actually ask for in parallel
             // First we need to know the deterministic part id if this is a partstudio item
@@ -1294,28 +1373,79 @@ export class App extends BaseApp {
             // Run them both in parallel and when they are complete we can do our work
             Promise.all([findPartPromise, itemConfigPromise]).then(
                 ([item, itemConfig]) => {
+                    const result: configInsertInfo = {
+                        configList: [],
+                        deterministicId: item.deterministicId,
+                        libraryVersion: itemConfig.libraryVersion,
+                        microversionSkew: itemConfig.microversionSkew,
+                        rejectMicroversionSkew: itemConfig.rejectMicroversionSkew,
+                        serializationVersion: itemConfig.serializationVersion,
+                        sourceMicroversion: itemConfig.sourceMicroversion,
+                    };
                     let onchange = () => {};
                     let ongenerate = () => {};
                     if (itemConfig.configurationParameters.length === 1) {
                         onchange = () => {
-                            console.log('Single Item Configuration Change');
+                            this.updateConfigurationUI(item, index);
                         };
                     } else {
                         onchange = () => {
                             console.log('Multi-item Configuration Change');
+                            const btn = document.getElementById(`cb${index}`);
+                            if (btn !== undefined && btn !== null) {
+                                btn.removeAttribute('disabled');
+                            }
                         };
                         ongenerate = () => {
-                            console.log('Generate Button Clicked');
+                            this.updateConfigurationUI(item, index);
+                            const btn = document.getElementById(`cb${index}`);
+                            if (btn !== undefined && btn !== null) {
+                                btn.setAttribute('disabled', 'disabled');
+                            }
                         };
                     }
                     itemParentGroup.append(
                         genEnumOption(itemConfig, index, onchange, ongenerate)
                     );
-                    resolve(item);
+                    resolve(result);
                 }
             );
         });
     }
+    /**
+     * Update the configuration image
+     * @param item Item to be updated
+     * @param index Configuration UI Index
+     */
+    public updateConfigurationUI(item: BTInsertableInfo, index: number) {
+        const configList = this.getConfigValues(index);
+        const configuration = this.buildAssemblyConfiguration(configList, '');
+
+        const img = document.getElementById(`ci${index}`) as HTMLImageElement;
+
+        if (img !== undefined && img !== null) {
+            img.setAttribute(
+                'src',
+                'https://cad.onshape.com/images/default-document.png'
+            );
+        }
+        this.getMetaData(item, configuration).then((res) => {
+            const txtdiv = document.getElementById(`ct${index}`);
+            if (txtdiv !== undefined && txtdiv !== null) {
+                txtdiv.textContent = res['Name'];
+            }
+            const img = document.getElementById(`ci${index}`) as HTMLImageElement;
+
+            if (img !== undefined && img !== null) {
+                this.onshape.replaceThumbnailImage(
+                    img,
+                    res['thumbnail'] as BTThumbnailInfo,
+                    { retry: true, retryInterval: 5 }
+                );
+            }
+        });
+    }
+
     /**
      * Insert to an unknown tab (generally this is an error)
      * @param documentId Document to insert into
@@ -1328,7 +1458,7 @@ export class App extends BaseApp {
         workspaceId: string,
         elementId: string,
         item: BTInsertableInfo,
-        _configList: configInfo[]
+        insertInfo: configInsertInfo
     ): void {
         alert(
             `Unable to determine how to insert item ${item.id} - ${item.elementName} into ${this.targetDocumentElementInfo.elementType} ${documentId}/w/${workspaceId}/e/${elementId}`
@@ -1417,16 +1547,17 @@ export class App extends BaseApp {
      * @param elementId Element of parts studio to insert into
      * @param item Document element to insert
      */
-    public insertToPartStudio(
+    public async insertToPartStudio(
         documentId: string,
         workspaceId: string,
         elementId: string,
         item: BTInsertableInfo,
-        configList: configInfo[]
-    ): void {
-        console.log(
-            `Inserting item ${item.id} - ${item.elementName} into Part Studio ${documentId}/w/${workspaceId}/e/${elementId}`
-        );
+        //        configList: configInfo[]
+        insertInfo: configInsertInfo
+    ): Promise<void> {
+        // console.log(
+        //     `Inserting item ${item.id} - ${item.elementName} into Part Studio ${documentId}/w/${workspaceId}/e/${elementId}`
+        // );
         this.setInProgress();
         // "feature": {
         //     "btType": "BTMFeature-134",
@@ -1462,47 +1593,6 @@ export class App extends BaseApp {
         //   "rejectMicroversionSkew": false,
         //   "serializationVersion": "1.1.23"
 
-        // {
-        //     "feature": {
-        //         "btType": "BTMFeature-134",
-        //         "namespace": "",
-        //         "name": "Derived Aluminum Channel (Configurable)",
-        //         "suppressed": false
-        //         "featureType": "importDerived",
-        //         "subFeatures": [],
-        //         "returnAfterSubfeatures": false,
-        //         "parameters": [
-        //             {
-        //                 "btType": "BTMParameterQueryList-148",
-        //                 "parameterId": "parts",
-        //                 "queries": [
-        //                     {
-        //                         "btType": "BTMIndividualQuery-138",
-        //                         "queryStatement": null
-        //                         "queryString": "query=qEverything(EntityType.BODY);",
-        //                     }
-        //                 ]
-        //             },
-        //             {
-        //                 "btType": "BTMParameterDerived-864",
-        //                 "parameterId": "buildFunction",
-        //                 "namespace": "d69cc1cee1ec6c1886445462a::vundefined::e0b4fa2e54db3ebd11d3f072c::mf600d9e3b5579fb00fbc0ccf",
-        //                 "configuration": [
-        //                     {
-        //                         "btType": "BTMParameterEnum-145",
-        //                         "enumName": "List_rQUjcTCrGVekld_conf",
-        //                         "namespace": "d69cc1cee1ec6c1886445462a::vundefined::e0b4fa2e54db3ebd11d3f072c::mf600d9e3b5579fb00fbc0ccf",
-        //                         "value": "Copy_of_3_00___3_Hole_"
-        //                     }
-        //                 ]
-        //             }
-        //         ],
-        //     },
-        //     "libraryVersion": 1746,
-        //     "microversionSkew": false,
-        //     "rejectMicroversionSkew": false,
-        //     "serializationVersion": "1.1.23"
-        // }
         const namespace = this.computeNamespace(item);
 
         let queryString = 'query=qEverything(EntityType.BODY);';
@@ -1515,6 +1605,37 @@ export class App extends BaseApp {
             ) {
                 queryString = item.insertableQuery;
             }
+        }
+        // If we are doing a plain part, we may have to actually ask the configuration in order to get the version of the library that we are inserting from
+        if (insertInfo == undefined) {
+            // Pick some clean defaults to work from
+            insertInfo = {
+                configList: [],
+                libraryVersion: 1746,
+                microversionSkew: false,
+                rejectMicroversionSkew: false,
+                serializationVersion: '1.1.23',
+                sourceMicroversion: undefined,
+            };
+            let wvm = 'w';
+            let wvmid = item.workspaceId;
+            if (item.versionId !== undefined && item.versionId !== null) {
+                wvm = 'v';
+                wvmid = item.versionId;
+            }
+            // Second we need to get all the configuration information for the item
+            const config = await this.onshape.elementApi.getConfiguration({
+                did: item.documentId,
+                wvm: wvm,
+                wvmid: wvmid,
+                eid: item.elementId,
+            });
+
+            insertInfo.libraryVersion = config.libraryVersion;
+            insertInfo.microversionSkew = config.microversionSkew;
+            insertInfo.rejectMicroversionSkew = config.rejectMicroversionSkew;
+            insertInfo.serializationVersion = config.serializationVersion;
+            insertInfo.sourceMicroversion = config.sourceMicroversion;
         }
 
         const iquery: BTMIndividualQuery138 = {
@@ -1533,8 +1654,8 @@ export class App extends BaseApp {
             parameterId: 'buildFunction',
             namespace: namespace,
             imports: [],
-            _configuration: configList
-                ? this.buildPartConfiguration(configList, namespace)
+            _configuration: insertInfo.configList
+                ? this.buildPartConfiguration(insertInfo.configList, namespace)
                 : undefined,
         };
         this.onshape.partStudioApi
@@ -1559,11 +1680,11 @@ export class App extends BaseApp {
                         // suppressionConfigured: false, // When would it be true
                         // variableStudioReference: false, // When would it be true
                     },
-                    libraryVersion: 1746, // Where did this come from?
-                    microversionSkew: false, // Why is it false
-                    rejectMicroversionSkew: false, // Why is it false?
-                    serializationVersion: '1.1.23', // Where did this come from?
-                    // sourceMicroversion: item.microversionId,  // Do we really need this?
+                    libraryVersion: insertInfo.libraryVersion,
+                    microversionSkew: insertInfo.microversionSkew,
+                    rejectMicroversionSkew: insertInfo.rejectMicroversionSkew,
+                    serializationVersion: insertInfo.serializationVersion,
+                    // sourceMicroversion: insertInfo.sourceMicroversion,  // Don't set this or it fails
                     // documentId: item.documentId,
                     // elementId: item.elementId,
                     // featureId: '', // item.featureId,
@@ -1608,13 +1729,18 @@ export class App extends BaseApp {
         workspaceId: string,
         elementId: string,
         item: BTInsertableInfo,
-        configList: configInfo[]
+        insertInfo: configInsertInfo // configList: configInfo[]
     ): void {
-        console.log(
-            `Inserting item ${item.id} - ${item.elementName} into Assembly ${documentId}/w/${workspaceId}/e/${elementId}`
-        );
+        // console.log(
+        //     `Inserting item ${item.id} - ${item.elementName} into Assembly ${documentId}/w/${workspaceId}/e/${elementId}`
+        // );
 
         this.setInProgress();
+
+        let configuration = undefined;
+        if (insertInfo !== undefined && insertInfo.configList !== undefined) {
+            configuration = this.buildAssemblyConfiguration(insertInfo.configList, '');
+        }
 
         this.onshape.assemblyApi
             .createInstance({
@@ -1622,9 +1748,7 @@ export class App extends BaseApp {
                 wid: workspaceId,
                 eid: elementId,
                 bTAssemblyInstanceDefinitionParams: {
-                    _configuration: configList
-                        ? this.buildAssemblyConfiguration(configList, '')
-                        : undefined,
+                    _configuration: configuration,
                     documentId: item.documentId,
                     elementId: item.elementId,
                     featureId: '', // item.featureId,

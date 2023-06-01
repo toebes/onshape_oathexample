@@ -64,6 +64,7 @@ export const OptBool = (props) => {
                                 'os-param-checkbox-input ng-pristine ng-untouched ng-valid ng-not-empty cv' +
                                 index
                             }
+                            data-id={optBool.parameterId}
                             type="checkbox"
                             data-type="boolean"
                             data-parameter-value="true"

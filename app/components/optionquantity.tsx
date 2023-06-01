@@ -241,6 +241,7 @@ export const OptQuantity = (props) => {
                             'os-param-number dropdown-source ng-pristine ng-untouched ng-valid ng-not-empty os-param-form-item cv' +
                             index
                         }
+                        data-id={optQuantity.parameterId}
                         data-type="quantity"
                         type="text"
                         autocomplete="off"

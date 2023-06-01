@@ -95,7 +95,8 @@ export function genEnumOption(
                 {itemConfig.configurationParameters.length > 1 ? (
                     <div class="select-item-generate-button-holder">
                         <button
-                            class="os-button os-outline select-item-generate-button"
+                            class="os-button os-outline select-item-generate-button cb"
+                            id={`cb${index}`}
                             onclick={ongenerate}
                             disabled="disabled"
                         >
