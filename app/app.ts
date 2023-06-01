@@ -150,7 +150,7 @@ export class App extends BaseApp {
         div.appendChild(dumpNodes);
 
         this.setAppElements(div);
-        this.setBreadcrumbs([], undefined);
+        this.setBreadcrumbs([]);
 
         this.getDocumentElementInfo(this.documentId, this.workspaceId, this.elementId)
             .then((val: BTDocumentElementInfo) => {
@@ -167,7 +167,7 @@ export class App extends BaseApp {
                     return;
                 }
                 // Start out by dumping the list of my Onshape entries
-                this.showHome();
+                this.gotoFolder({ jsonType: 'home' });
             })
             .catch((err) => {
                 this.failApp(err);
@@ -193,7 +193,7 @@ export class App extends BaseApp {
      */
     public setBreadcrumbs(
         breadcrumbs: BTGlobalTreeNodeInfo[],
-        teamroot: BTGlobalTreeNodeInfo
+        teamroot?: BTGlobalTreeNodeInfo
     ): void {
         // Find where they want us to put the breadcrumbs
         const breadcrumbscontainer = document.getElementById('breadcrumbs');
@@ -312,7 +312,7 @@ export class App extends BaseApp {
                 'Home',
                 breadcrumbs.length === 0,
                 () => {
-                    this.showHome();
+                    this.gotoFolder({ jsonType: 'home' });
                 }
             )
         );
@@ -347,7 +347,7 @@ export class App extends BaseApp {
                         `${node.id} - NOT FOUND (${node.name})`,
                         isLast && !addteamroot,
                         () => {
-                            this.showHome();
+                            this.gotoFolder({ jsonType: 'home' });
                         }
                     );
                 } else {
@@ -358,7 +358,7 @@ export class App extends BaseApp {
                         nodename,
                         isLast && !addteamroot,
                         () => {
-                            this.dumpMagic(nodeid);
+                            this.gotoFolder(node);
                         }
                     );
                 }
@@ -372,7 +372,7 @@ export class App extends BaseApp {
                     useteamicon = false;
                 }
                 breadcrumbdiv = this.createBreadcrumbNode(icon, node.name, isLast, () => {
-                    this.processFolder(node, teamroot);
+                    this.gotoFolder(node, teamroot);
                 });
             }
             breadcrumbsdiv.appendChild(breadcrumbdiv);
@@ -383,7 +383,7 @@ export class App extends BaseApp {
                     teamroot.name,
                     isLast,
                     () => {
-                        this.processFolder(teamroot, teamroot);
+                        this.gotoFolder(teamroot, teamroot);
                     }
                 );
                 breadcrumbsdiv.appendChild(teamrootdiv);
@@ -433,66 +433,38 @@ export class App extends BaseApp {
         }
         return div;
     }
-    /**
-     * Show the home list of clickable items
-     */
-    public showHome() {
-        // Clean up the UI so we can populate it with new entries
-        let dumpNodes = document.getElementById('dump');
-        this.hidePopup();
-        if (dumpNodes !== null) {
-            dumpNodes.innerHTML = '';
-        } else {
-            dumpNodes = document.body;
-        }
+    public processHome(dumpNodes: HTMLElement) {
         const table = new JTTable({
             class: 'os-document-filter-table full-width',
         });
-
         for (const magicid in this.magicInfo) {
             const magicinfo = this.magicInfo[magicid];
             if (!magicinfo.hideFromMenu) {
+                const magicNode: BTGlobalTreeNodeInfo = {
+                    jsonType: 'magic',
+                    id: magicid,
+                };
                 const row = table.addBodyRow();
                 const span = createDocumentElement('span');
                 const icon = createSVGIcon(magicinfo.icon, 'documents-filter-icon');
                 icon.onclick = () => {
-                    this.dumpMagic(magicid);
+                    this.gotoFolder(magicNode);
                 };
                 span.appendChild(icon);
                 const textspan = createDocumentElement('span', {
                     textContent: magicinfo.label,
                 });
                 textspan.onclick = () => {
-                    this.dumpMagic(magicid);
+                    this.gotoFolder(magicNode);
                 };
                 span.appendChild(textspan);
                 row.add(span);
             }
         }
         dumpNodes.appendChild(table.generate());
-        this.setBreadcrumbs([], undefined);
+        this.setBreadcrumbs([]);
     }
-    /**
-     * Dump a list of entries from the Magic api
-     * @param magic Which magic list to dump
-     */
-    public dumpMagic(magic: string): void {
-        // Note that we are running and reset the count of entries we have gotten
-        this.hidePopup();
-        this.loaded = 0;
 
-        // Clean up the UI so we can populate it with new entries
-        let dumpNodes = document.getElementById('dump');
-        if (dumpNodes !== null) {
-            dumpNodes.innerHTML = '';
-        } else {
-            dumpNodes = document.body;
-        }
-        const container = this.getFileListContainer();
-        dumpNodes.appendChild(container);
-        // Start the process off with the first in the magic list
-        this.processMagicNode(magic);
-    }
     /**
      * Append a dump of elements to the current UI
      * @param items Items to append
@@ -582,7 +554,7 @@ export class App extends BaseApp {
             if (selectable) {
                 if (item.isContainer) {
                     rowelem.onclick = () => {
-                        this.processFolder(item, teamroot);
+                        this.gotoFolder(item, teamroot);
                     };
                 } else if (item.jsonType === 'document-summary') {
                     rowelem.onclick = () => {
@@ -1812,8 +1784,8 @@ export class App extends BaseApp {
                 includeWires: false,
             })
             .then((res) => {
-                this.setBreadcrumbs(res.pathToRoot, undefined);
-                this.ProcessNodeResults(res, undefined);
+                this.setBreadcrumbs(res.pathToRoot);
+                this.ProcessNodeResults(res);
             })
             .catch((err) => {
                 // Something went wrong, some mark us as no longer running.
@@ -1827,7 +1799,7 @@ export class App extends BaseApp {
      */
     public ProcessNodeResults(
         info: BTGlobalTreeNodesInfo,
-        teamroot: BTGlobalTreeNodeInfo
+        teamroot?: BTGlobalTreeNodeInfo
     ) {
         const nodes = info as BTGlobalTreeNodesInfo;
         // When it does, append all the elements to the UI
@@ -1878,10 +1850,7 @@ export class App extends BaseApp {
      * @param teamroot Preserved team root so that we know when we are processing a folder under a team
      *
      */
-    public processFolder(
-        item: BTGlobalTreeNodeInfo,
-        teamroot: BTGlobalTreeNodeInfo
-    ): void {
+    public gotoFolder(item: BTGlobalTreeNodeInfo, teamroot?: BTGlobalTreeNodeInfo): void {
         // id: string, _name: string, treeHref: string): void {
         // If we are in the process of running, we don't want to start things over again
         // so just ignore the call here
@@ -1918,6 +1887,10 @@ export class App extends BaseApp {
                     // Something went wrong, some mark us as no longer running.
                     console.log(`**** Call failed: ${err}`);
                 });
+        } else if (item.jsonType === 'home') {
+            this.processHome(dumpNodes);
+        } else if (item.jsonType === 'magic' || item.resourceType === 'magic') {
+            this.processMagicNode(item.id);
         } else {
             this.onshape.globalTreeNodesApi
                 .globalTreeNodesFolderInsertables({
