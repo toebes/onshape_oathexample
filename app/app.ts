@@ -53,6 +53,7 @@ import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
 import { JTTable } from './common/jttable';
 import { classListAdd, createDocumentElement, waitForTooltip } from './common/htmldom';
 import { genEnumOption } from './components/configurationoptions';
+import { JTStorage, InitStorage } from './common/jtstore';
 export interface magicIconInfo {
     label: string;
     icon: OnshapeSVGIcon;
@@ -77,6 +78,11 @@ export interface configInsertInfo {
 
 export interface metaData {
     [key: string]: any;
+}
+
+export interface folderLocation {
+    folder: BTGlobalTreeNodeInfo;
+    teamroot: BTGlobalTreeNodeInfo;
 }
 
 export class App extends BaseApp {
@@ -127,10 +133,12 @@ export class App extends BaseApp {
             label: 'Custom table samples',
         },
     };
+    public storage: JTStorage;
     /**
      * The main entry point for an app
      */
     public startApp(): void {
+        this.storage = InitStorage();
         // Create the main container
         var div = createDocumentElement('div', { id: 'apptop' });
         this.createPopupDialog(div);
@@ -166,8 +174,10 @@ export class App extends BaseApp {
                     );
                     return;
                 }
+
+                const lastLocation = this.getLastLocation();
                 // Start out by dumping the list of my Onshape entries
-                this.gotoFolder({ jsonType: 'home' });
+                this.gotoFolder(lastLocation.folder, lastLocation.teamroot);
             })
             .catch((err) => {
                 this.failApp(err);
@@ -185,6 +195,29 @@ export class App extends BaseApp {
      */
     public showInitializing() {
         super.showInitializing();
+    }
+    /**
+     * Preserve the last location that we were at
+     * @param location Location to
+     */
+    public saveLastLocation(location: folderLocation): void {
+        this.storage.set('insertmanager_lastloc', location);
+        // TODO: Save this using the new API
+    }
+    /**
+     * Restore the last saved location
+     * @returns Last saved location
+     */
+    public getLastLocation(): folderLocation {
+        // TODO: Retrieve the last location using the API
+        let result: folderLocation = this.storage.getJSON('insertmanager_lastloc');
+        if (result === undefined || result === null) {
+            result = {
+                folder: { jsonType: 'home' },
+                teamroot: undefined,
+            };
+        }
+        return result;
     }
     /**
      * Set the breadcrumbs in the header
@@ -1848,13 +1881,11 @@ export class App extends BaseApp {
      * Navigate into a folder and populate the UI with the contents
      * @param item Entry to be processed
      * @param teamroot Preserved team root so that we know when we are processing a folder under a team
-     *
      */
     public gotoFolder(item: BTGlobalTreeNodeInfo, teamroot?: BTGlobalTreeNodeInfo): void {
-        // id: string, _name: string, treeHref: string): void {
-        // If we are in the process of running, we don't want to start things over again
-        // so just ignore the call here
         this.hidePopup();
+
+        this.saveLastLocation({ folder: item, teamroot: teamroot });
 
         // Note that we are running and reset the count of entries we have gotten
         this.loaded = 0;
