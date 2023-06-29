@@ -30,8 +30,7 @@ const path = require('path');
 const webpack = require('webpack');
 const FileManagerPlugin = require('filemanager-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const BundleAnalyzerPlugin =
-    require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 const package = require('./package.json');
 const toolsVersion = package.version;
@@ -60,16 +59,7 @@ config = {
     },
     resolve: {
         modules: [__dirname, path.join(__dirname, 'node_modules')],
-        extensions: [
-            '.ts',
-            '.tsx',
-            '.js',
-            '.css',
-            '.eot',
-            '.png',
-            '.svg',
-            '.json',
-        ],
+        extensions: ['.ts', '.tsx', '.js', '.css', '.eot', '.png', '.svg', '.json'],
     },
     module: {
         rules: [
@@ -82,11 +72,7 @@ config = {
                 },
                 include: [
                     path.resolve(__dirname, 'app'),
-                    path.resolve(
-                        __dirname,
-                        'node_modules',
-                        'onshape-typescript-fetch'
-                    ),
+                    path.resolve(__dirname, 'node_modules', 'onshape-typescript-fetch'),
                 ],
             },
             // All .css files are processed with the css-loader, style-loader
