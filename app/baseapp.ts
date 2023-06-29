@@ -28,6 +28,7 @@
 
 'use strict';
 
+import { createDocumentElement } from './common/htmldom';
 import { onshapeConfig, OnshapeAPI } from './onshapeapi';
 
 /**
@@ -154,6 +155,79 @@ export class BaseApp {
         }
     }
     /**
+     * Get the contents of a file from Onshape
+     * @param url URL of file to get from onshape
+     * @returns Contents of the file
+     */
+    public getOnshapeFile(url: string): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            let xhr = new XMLHttpRequest();
+            let uri = `${this.myserver}/getfile.php?url=${url}`;
+            xhr.open('GET', uri, true);
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        resolve(xhr.responseText);
+                    } else {
+                        reject(xhr.responseText);
+                    }
+                }
+            };
+            xhr.send();
+        });
+    }
+    /**
+     * Patch in the CSS used by Onshape to our document so that we get the same styles
+     * @param url URL of Onshape document to extract style sheets from
+     * @returns
+     */
+    public insertOnshapeCSS(url: string): Promise<boolean> {
+        return new Promise<boolean>((resolve, reject) => {
+            this.getOnshapeFile(url).then((css: string) => {
+                // Extract all the <link html elements from the file.
+                const re = new RegExp(/<link[^>]*>/g);
+                const found = css.match(re);
+                // Find the head element of the iframe so that we know where to patch in the stylesheets
+                let headElement = document.getElementsByTagName('head')[0];
+                if (headElement !== null && headElement !== undefined) {
+                    const baseRef = createDocumentElement('base', {
+                        href: this.myserver,
+                    });
+                    headElement.appendChild(baseRef);
+                    found.forEach((item) => {
+                        // The Links will be of the following form.  Note that
+                        // we only want the stylesheet ones.  We can ignore the others
+                        // <link rel="shortcut icon" href="/favicon.png">
+                        // <link href="/js/vendor-bundle.372f38798a62e5110c68.css" rel="stylesheet">
+                        // <link href="/css/woolsthorpe.17479501f16d0d4ce613.css" rel="stylesheet">
+                        if (item.match(/rel *= *['"]stylesheet["']/) !== null) {
+                            // Get the href portion of it.  Note that
+                            // match returns us both the full match (element 0)
+                            // and the exact match (element 1)
+                            const hrefRegex = /href=["']([^'"]+)/;
+                            const css = item.match(hrefRegex);
+                            // Did we get a match at all?
+                            if (css !== null && css.length > 1) {
+                                // We did.  Create a link element in the DOM
+                                var cssLink = createDocumentElement('link', {
+                                    href: `${this.myserver}/getfile.php?url=${
+                                        this.server + css[1]
+                                    }`,
+                                    rel: 'stylesheet',
+                                    type: 'text/css',
+                                });
+                                // Insert the element into the head of the IFrame
+                                headElement.appendChild(cssLink);
+                            }
+                        }
+                    });
+                }
+                resolve(true);
+            });
+        });
+    }
+    /**
      * The main entry point for an app
      */
     public startApp(): void {}
@@ -179,9 +253,7 @@ export class BaseApp {
         let config: onshapeConfig = { myserver: this.myserver };
 
         // Parse query parameters
-        let queryParameters = decodeURIComponent(
-            window.location.search.substring(1)
-        );
+        let queryParameters = decodeURIComponent(window.location.search.substring(1));
         let qp = document.getElementById('qp');
         if (qp !== null) {
             qp.innerHTML = queryParameters;
@@ -193,24 +265,32 @@ export class BaseApp {
             let val = queryParametersArray[i].substring(idx + 1);
             config[parm] = val;
         }
-        //
-        // Cache the ones we need to work with overall
-        //
-        this.documentId = config.documentId;
-        this.elementId = config.elementId;
-        this.workspaceId = config.workspaceId;
-        this.server = config.server;
-        //
-        // Initialize the Onshape APIs
-        //
-        this.onshape = new OnshapeAPI(config);
-        this.onshape
-            .init()
-            .then(() => {
-                this.initApp();
-            })
-            .catch((reason: string) => {
-                this.failApp(reason);
-            });
+        // Figure out where Onshape was loaded from
+        const url =
+            window.location != window.parent.location
+                ? document.referrer
+                : document.location.href;
+        // Use that URL to scrape out the CSS and patch our Iframe to use the same CSS
+        this.insertOnshapeCSS(url).then((_result) => {
+            //
+            // Cache the ones we need to work with overall
+            //
+            this.documentId = config.documentId;
+            this.elementId = config.elementId;
+            this.workspaceId = config.workspaceId;
+            this.server = config.server;
+            //
+            // Initialize the Onshape APIs
+            //
+            this.onshape = new OnshapeAPI(config);
+            this.onshape
+                .init()
+                .then(() => {
+                    this.initApp();
+                })
+                .catch((reason: string) => {
+                    this.failApp(reason);
+                });
+        });
     }
 }
