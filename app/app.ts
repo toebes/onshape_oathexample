@@ -510,7 +510,7 @@ export class App extends BaseApp {
         // Figure out where we are to add the entries
         let container = this.getFileListContainer();
         // Iterate over all the items
-        for (let item of items) {
+        items.map((item) => {
             const itemInfo = item as BTDocumentSummaryInfo;
             // Have we hit the limit?  If so then just skip out
             if (this.loaded >= this.loadedlimit) {
@@ -597,7 +597,7 @@ export class App extends BaseApp {
                 }
             }
             container.appendChild(rowelem);
-        }
+        });
     }
     /**
      * Finds the documents container to append entries to.  If one doesn't
@@ -1918,6 +1918,16 @@ export class App extends BaseApp {
                     // Something went wrong, some mark us as no longer running.
                     console.log(`**** Call failed: ${err}`);
                 });
+        } else if (item.jsonType === 'proxy-library') {
+            // this.preferences.getProxyLibrary(item).then((res) => {
+            //     this.setBreadcrumbs(res.pathToRoot, teamroot);
+            //     this.ProcessNodeResults(res, teamroot);
+            // });
+        } else if (item.jsonType === 'proxy-folder') {
+            // this.preferences.getProxyFolder(item).then((res) => {
+            //     this.setBreadcrumbs(res.pathToRoot, teamroot);
+            //     this.ProcessNodeResults(res, teamroot);
+            // });
         } else if (item.jsonType === 'home') {
             this.processHome(dumpNodes);
         } else if (item.jsonType === 'magic' || item.resourceType === 'magic') {
