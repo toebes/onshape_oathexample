@@ -53,7 +53,7 @@ import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
 import { JTTable } from './common/jttable';
 import { classListAdd, createDocumentElement, waitForTooltip } from './common/htmldom';
 import { genEnumOption } from './components/configurationoptions';
-import { JTStorage, InitStorage } from './common/jtstore';
+import { Preferences } from './preferences';
 export interface magicIconInfo {
     label: string;
     icon: OnshapeSVGIcon;
@@ -132,52 +132,64 @@ export class App extends BaseApp {
             icon: 'svg-icon-tutorial-element',
             label: 'Custom table samples',
         },
+        RI: { icon: 'svg-icon-recentlyOpened', label: 'Recently Inserted' },
     };
-    public storage: JTStorage;
+    public preferences: Preferences;
     /**
      * The main entry point for an app
      */
     public startApp(): void {
-        this.storage = InitStorage();
-        // Create the main container
-        var div = createDocumentElement('div', { id: 'apptop' });
-        this.createPopupDialog(div);
+        this.preferences = new Preferences(this.onshape);
+        this.preferences
+            .initUserPreferences('insert_manager')
+            .then((_val) => {
+                // Create the main container
+                var div = createDocumentElement('div', { id: 'apptop' });
+                this.createPopupDialog(div);
 
-        // Create the main div that shows where we are
-        var bcdiv = createDocumentElement('div', {
-            id: 'breadcrumbs',
-            class: 'os-documents-heading-area disable-user-select os-row os-wrap os-align-baseline',
-        });
-        div.appendChild(bcdiv);
+                // Create the main div that shows where we are
+                var bcdiv = createDocumentElement('div', {
+                    id: 'breadcrumbs',
+                    class: 'os-documents-heading-area disable-user-select os-row os-wrap os-align-baseline',
+                });
+                div.appendChild(bcdiv);
 
-        // Create a place holder for the nodes to be dumped into
-        const dumpNodes = createDocumentElement('div', {
-            id: 'dump',
-            class: 'y-overflow',
-        });
-        div.appendChild(dumpNodes);
+                // Create a place holder for the nodes to be dumped into
+                const dumpNodes = createDocumentElement('div', {
+                    id: 'dump',
+                    class: 'y-overflow',
+                });
+                div.appendChild(dumpNodes);
 
-        this.setAppElements(div);
-        this.setBreadcrumbs([]);
+                this.setAppElements(div);
+                this.setBreadcrumbs([]);
 
-        this.getDocumentElementInfo(this.documentId, this.workspaceId, this.elementId)
-            .then((val: BTDocumentElementInfo) => {
-                this.targetDocumentElementInfo = val;
+                this.getDocumentElementInfo(
+                    this.documentId,
+                    this.workspaceId,
+                    this.elementId
+                )
+                    .then((val: BTDocumentElementInfo) => {
+                        this.targetDocumentElementInfo = val;
 
-                if (val.elementType === 'PARTSTUDIO') {
-                    this.insertToTarget = this.insertToPartStudio;
-                } else if (val.elementType === 'ASSEMBLY') {
-                    this.insertToTarget = this.insertToAssembly;
-                } else {
-                    this.failApp(
-                        `Only able to insert into PartStudios and Assemblies.  This page is of type ${val.elementType}`
-                    );
-                    return;
-                }
+                        if (val.elementType === 'PARTSTUDIO') {
+                            this.insertToTarget = this.insertToPartStudio;
+                        } else if (val.elementType === 'ASSEMBLY') {
+                            this.insertToTarget = this.insertToAssembly;
+                        } else {
+                            this.failApp(
+                                `Only able to insert into PartStudios and Assemblies.  This page is of type ${val.elementType}`
+                            );
+                            return;
+                        }
 
-                const lastLocation = this.getLastLocation();
-                // Start out by dumping the list of my Onshape entries
-                this.gotoFolder(lastLocation.folder, lastLocation.teamroot);
+                        this.getLastLocation().then((lastLocation) => {
+                            this.gotoFolder(lastLocation[0], lastLocation[1]);
+                        });
+                    })
+                    .catch((err) => {
+                        this.failApp(err);
+                    });
             })
             .catch((err) => {
                 this.failApp(err);
@@ -201,23 +213,27 @@ export class App extends BaseApp {
      * @param location Location to
      */
     public saveLastLocation(location: folderLocation): void {
-        this.storage.set('insertmanager_lastloc', location);
-        // TODO: Save this using the new API
+        this.preferences.setLastKnownLocation([location.folder, location.teamroot]);
     }
     /**
      * Restore the last saved location
      * @returns Last saved location
      */
-    public getLastLocation(): folderLocation {
-        // TODO: Retrieve the last location using the API
-        let result: folderLocation = this.storage.getJSON('insertmanager_lastloc');
-        if (result === undefined || result === null) {
-            result = {
-                folder: { jsonType: 'home' },
-                teamroot: undefined,
-            };
-        }
-        return result;
+    public getLastLocation(): Promise<Array<BTGlobalTreeNodeInfo>> {
+        return new Promise((resolve, _reject) => {
+            this.preferences
+                .getLastKnownLocation()
+                .then((locations) => {
+                    if (locations === null || locations === undefined) {
+                        resolve([{ jsonType: 'home' }, undefined]);
+                    } else {
+                        resolve(locations);
+                    }
+                })
+                .catch((err) => {
+                    resolve([{ jsonType: 'home' }, undefined]);
+                });
+        });
     }
     /**
      * Set the breadcrumbs in the header
@@ -466,7 +482,11 @@ export class App extends BaseApp {
         }
         return div;
     }
-    public processHome(dumpNodes: HTMLElement) {
+    /**
+     * Show all of the selectable items on the home menu
+     * @param elem DOM Element to put information into
+     */
+    public processHome(elem: HTMLElement) {
         const table = new JTTable({
             class: 'os-document-filter-table full-width',
         });
@@ -494,7 +514,7 @@ export class App extends BaseApp {
                 row.add(span);
             }
         }
-        dumpNodes.appendChild(table.generate());
+        elem.appendChild(table.generate());
         this.setBreadcrumbs([]);
     }
 
@@ -1793,6 +1813,21 @@ export class App extends BaseApp {
      * @param uri URI node for the entries to be loaded
      */
     public processMagicNode(magic: string) {
+        if (magic === 'RI') {
+            this.preferences.getAllRecentlyInserted().then((res) => {
+                const recentNode: BTGlobalTreeNodesInfo = {
+                    pathToRoot: [
+                        { jsonType: 'magic', id: magic, name: 'Recently Inserted' },
+                    ],
+                    next: undefined,
+                    href: undefined,
+                    items: res,
+                };
+                this.setBreadcrumbs(recentNode.pathToRoot);
+                this.ProcessNodeResults(recentNode);
+            });
+            return;
+        }
         // uri: string) {
         // Get Onshape to return the list
         this.onshape.globalTreeNodesApi
