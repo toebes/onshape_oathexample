@@ -109,7 +109,6 @@ export class Preferences {
         return new Promise((resolve, _reject) => {
             this.existsEntry(name, libInfo)
                 .then((res) => {
-                    console.log(`Creat Custom res=${res}`);
                     if (!res) {
                         this.onshape.appElementApi
                             .updateAppElement({
@@ -130,7 +129,6 @@ export class Preferences {
                             });
                     } else {
                         // The entry already existed!
-                        console.log('Entry already exists!');
                         resolve(false);
                     }
                 })
@@ -166,7 +164,6 @@ export class Preferences {
                                 wvm: 'w',
                             })
                             .then((res) => {
-                                console.log(res);
                                 resolve(true);
                             })
                             .catch((err) => {
@@ -203,7 +200,6 @@ export class Preferences {
                     wvm: 'w',
                 })
                 .then((res) => {
-                    console.log(res);
                     resolve(res.tree[name]);
                 })
                 .catch((err) => {
@@ -291,8 +287,6 @@ export class Preferences {
         return new Promise((resolve, _reject) => {
             this.existsEntry(pref_name, libInfo)
                 .then((res) => {
-                    console.log(res);
-                    console.log(pref_name);
                     if (res) {
                         this.onshape.appElementApi
                             .updateAppElement({
@@ -307,7 +301,6 @@ export class Preferences {
                                 wvm: 'w',
                             })
                             .then((res) => {
-                                console.log(res);
                                 resolve(true);
                             })
                             .catch((err) => {
@@ -370,8 +363,6 @@ export class Preferences {
      */
     public existsEntry(name: string, libInfo: BTGlobalTreeProxyInfo): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            console.log('Checking exists entry.');
-            console.log(libInfo);
             this.onshape.appElementApi
                 .getJson({
                     did: libInfo.id,
@@ -380,12 +371,9 @@ export class Preferences {
                     wvm: 'w',
                 })
                 .then((res) => {
-                    console.log(res);
-                    console.log(`${name}=${res.tree.hasOwnProperty(name)}`);
                     resolve(res.tree.hasOwnProperty(name));
                 })
                 .catch((err) => {
-                    console.log(`Error ${err}`);
                     resolve(false);
                 });
         });
@@ -572,7 +560,10 @@ export class Preferences {
         name: string
     ): Promise<BTGlobalTreeNodeInfo> {
         return new Promise((resolve, _reject) => {
-            const result: BTGlobalTreeNodeInfo = { jsonType: 'proxy-foler', name: name };
+            const result: BTGlobalTreeNodeInfo = {
+                jsonType: 'proxy-foler',
+                name: name,
+            };
             resolve(undefined);
         });
     }
