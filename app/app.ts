@@ -184,14 +184,7 @@ export class App extends BaseApp {
                         }
 
                         this.getLastLocation().then((lastLocation) => {
-                            
-                            if(lastLocation[0] == undefined || lastLocation[1] == undefined){
-                              //Preferences file doesn't exist
-                              this.hidePopup()
-                              this.processHome(document.getElementById('dump'));
-                            }else{
-                              this.gotoFolder(lastLocation[0], lastLocation[1]);
-                            }
+                          this.gotoFolder(lastLocation[0], lastLocation[1]);
                         });
                     })
                     .catch((err) => {
