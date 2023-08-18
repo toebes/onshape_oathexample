@@ -86,7 +86,7 @@ export interface folderLocation {
 }
 
 export class App extends BaseApp {
-    public myserver = 'https://ftconshape.com/oauthexample';
+    public myserver = 'https://ftconshape.com/insertwork';
     public magic = 1;
     public loaded = 0;
     public loadedlimit = 2500; // Maximum number of items we will load
@@ -141,7 +141,7 @@ export class App extends BaseApp {
     public startApp(): void {
         this.preferences = new Preferences(this.onshape);
         this.preferences
-            .initUserPreferences('insert_manager')
+            .initUserPreferences('insert_work')
             .then((_val) => {
                 // Create the main container
                 var div = createDocumentElement('div', { id: 'apptop' });
@@ -184,7 +184,14 @@ export class App extends BaseApp {
                         }
 
                         this.getLastLocation().then((lastLocation) => {
-                            this.gotoFolder(lastLocation[0], lastLocation[1]);
+                            
+                            if(lastLocation[0] == undefined || lastLocation[1] == undefined){
+                              //Preferences file doesn't exist
+                              this.hidePopup()
+                              this.processHome(document.getElementById('dump'));
+                            }else{
+                              this.gotoFolder(lastLocation[0], lastLocation[1]);
+                            }
                         });
                     })
                     .catch((err) => {
