@@ -263,6 +263,23 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
+            this.getAllRecentlyInserted().then((recentList:BTGlobalTreeNodeInfo[])=>{
+              const newRecentList: BTGlobalTreeNodeInfo[] = [];
+              let recentItem: BTGlobalTreeNodeInfo;
+              let duplicate: BTGlobalTreeNodeInfo;
+              recentList.unshift(item)
+              //Go through recentList and add all recentItems, whose ids are not already an id in newRecentList
+              for(let i in recentList){
+                recentItem = recentList[i];
+                duplicate = newRecentList.find((element:BTGlobalTreeNodeInfo)=>{
+                  return element.id == recentItem.id && element != recentItem//needs configurable check as well
+                })
+                if(duplicate == undefined)newRecentList.push(recentItem)
+              }
+              if(recentList.length >= limit)newRecentList.pop()
+              console.log(newRecentList)
+              this.setBTGArray(name,newRecentList,libInfo)
+            })
             resolve(false);
         });
     }
@@ -341,7 +358,7 @@ export class Preferences {
                 })
                 .then((res) => {
                     let result: Array<BTGlobalTreeNodeInfo> = [];
-
+                    console.log(res)
                     for (let btg_json of res.tree[pref_name]) {
                         result.push(BTGlobalTreeProxyInfoJSONTyped(btg_json, false));
                     }

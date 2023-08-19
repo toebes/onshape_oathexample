@@ -53,7 +53,7 @@ import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
 import { JTTable } from './common/jttable';
 import { classListAdd, createDocumentElement, waitForTooltip } from './common/htmldom';
 import { genEnumOption } from './components/configurationoptions';
-import { Preferences } from './preferences';
+import { BTGlobalTreeProxyInfo, BTGlobalTreeProxyInfoJSONTyped, Preferences } from './preferences';
 export interface magicIconInfo {
     label: string;
     icon: OnshapeSVGIcon;
@@ -1722,6 +1722,11 @@ export class App extends BaseApp {
             })
             .then(() => {
                 this.setInProgress(false);
+                let documentNodeInfo: BTGlobalTreeNodeInfo
+                this.currentNodes.items.forEach((nodeItem: BTGlobalTreeNodeInfo)=>{
+                  if(nodeItem.id == item.documentId)return documentNodeInfo = nodeItem;
+                })
+                this.preferences.addRecentlyInserted(documentNodeInfo)
             })
             .catch((reason) => {
                 this.setInProgress(false);
@@ -1786,6 +1791,11 @@ export class App extends BaseApp {
             })
             .then(() => {
                 this.setInProgress(false);
+                let documentNodeInfo: BTGlobalTreeNodeInfo
+                this.currentNodes.items.forEach((nodeItem: BTGlobalTreeNodeInfo)=>{
+                  if(nodeItem.id == item.documentId)return documentNodeInfo = nodeItem;
+                })
+                this.preferences.addRecentlyInserted(documentNodeInfo)
             })
             .catch((reason) => {
                 this.setInProgress(false);
@@ -1860,6 +1870,7 @@ export class App extends BaseApp {
                 console.log(`**** Call failed: ${err}`);
             });
     }
+    currentNodes: BTGlobalTreeNodesInfo
     /**
      * Dump out all the elements that were returned from Onshape
      * @param info Node entry to be processed
@@ -1870,6 +1881,8 @@ export class App extends BaseApp {
         teamroot?: BTGlobalTreeNodeInfo
     ) {
         const nodes = info as BTGlobalTreeNodesInfo;
+        // Store node results for inserting recent parts
+        this.currentNodes = nodes;
         // When it does, append all the elements to the UI
         this.appendElements(nodes.items, teamroot);
         // Do we have any more in the list and are we under the limit for the UI
