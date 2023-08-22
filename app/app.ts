@@ -36,6 +36,7 @@ import {
     BTInsertableInfo,
     BTInsertablesListResponse,
     BTInsertablesListResponseFromJSON,
+    BTMEnumOption592,
     BTMIndividualQuery138,
     BTMParameter1,
     BTMParameterBoolean144,
@@ -612,6 +613,7 @@ export class App extends BaseApp {
                 } else if (item.jsonType === 'document-summary') {
                     rowelem.onclick = () => {
                         this.hidePopup();
+                        this.currentlySelectedNode = item
                         this.checkInsertItem(itemInfo);
                     };
                 }
@@ -1070,6 +1072,8 @@ export class App extends BaseApp {
         });
         return result;
     }
+
+    currentlySelectedNode: BTGlobalTreeNodeInfo
     /**
      * Show options for a configurable item to insert
      * @param item
@@ -1208,6 +1212,7 @@ export class App extends BaseApp {
 
             if (configurable) {
                 childContainerDiv.onclick = () => {
+                    // this.currentlySelectedItem = item
                     insertInfo.configList = this.getConfigValues(index);
                     this.insertToTarget(
                         this.documentId,
@@ -1397,7 +1402,7 @@ export class App extends BaseApp {
             });
             // Run them both in parallel and when they are complete we can do our work
             Promise.all([findPartPromise, itemConfigPromise]).then(
-                ([item, itemConfig]) => {
+                ([item, itemConfig]) => {                    
                     const result: configInsertInfo = {
                         configList: [],
                         deterministicId: item.deterministicId,
@@ -1422,6 +1427,7 @@ export class App extends BaseApp {
                             }
                         };
                         ongenerate = () => {
+                            console.log("Generated")
                             this.updateConfigurationUI(item, index);
                             const btn = document.getElementById(`cb${index}`);
                             if (btn !== undefined && btn !== null) {
@@ -1432,6 +1438,56 @@ export class App extends BaseApp {
                     itemParentGroup.append(
                         genEnumOption(itemConfig, index, onchange, ongenerate)
                     );
+                    const currentlySelectedConfig = this.currentlySelectedNode['configuration']
+                    console.log(currentlySelectedConfig)
+                    if(currentlySelectedConfig){
+                        let savedConfigObject = JSON.parse(this.currentlySelectedNode['configuration']);
+                      // if(itemConfig.configurationParameters.length > 1){
+                        console.log(savedConfigObject)
+                        console.log(itemConfig)
+                        for(let i in itemConfig.configurationParameters){
+                          const configurationParameters = itemConfig.configurationParameters[i];
+                          
+                          let selectElement;
+                          const savedConfigValue = savedConfigObject[configurationParameters.parameterId];
+                          
+                          switch(configurationParameters.btType){
+                            case 'BTMConfigurationParameterEnum-105': {
+                              selectElement = document.querySelectorAll('[data-id="' +  configurationParameters['parameterId'] + '"]')[0]
+                              console.log(selectElement)
+                              const currentOptions = configurationParameters['options'];
+                              currentOptions.forEach((configOption:BTMEnumOption592)=>{
+                                if(configOption.option == savedConfigValue){
+                                  selectElement['value'] = savedConfigValue;//doing this so that a invalid config doesn't cause issues
+                                }
+                              })
+                              break;
+                            };
+                            case 'BTMConfigurationParameterString-872':{
+                              selectElement = document.querySelectorAll('[data-id="' +  configurationParameters['value'].parameterId + '"]')[0]
+                              selectElement.value = savedConfigValue;
+                              break;
+                            };
+                            case 'BTMConfigurationParameterBoolean-2550':{
+                              //not sure if this works
+                              selectElement = document.querySelectorAll('[data-id="' +  configurationParameters['value'].parameterId + '"]')[0]
+                              //set string to boolean, not neceesary?
+                              // savedConfigValue = savedConfigValue == "true";
+                              selectElement.value = savedConfigValue;
+                              break;
+                            };
+                            case 'BTMConfigurationParameterQuantity-1826':{
+                              selectElement = document.querySelectorAll('[data-id="' +  configurationParameters['parameterId'] + '"]')[0]
+                              selectElement.value = savedConfigValue;
+                              break;
+                            }
+                          }
+                        }
+                        
+                        
+                        //itemconfig.configurationParameters.options[i].option == nodeItem.configuration then edit tsx data-id="List_3q8Nbgu4UdEuGX" .value = [i].option and update UI                       
+                        this.updateConfigurationUI(item, index);
+                    }
                     resolve(result);
                 }
             );
@@ -1563,6 +1619,36 @@ export class App extends BaseApp {
             extra = ';';
         });
         return result;
+    }
+
+    /**
+     * Proccess and save a recently inserted item for Recently Inserted
+     * @param item Document element to save
+     * @param insertInfo Document configurations to save
+     */
+    public proccessRecentlyInserted(
+      item: BTInsertableInfo,
+      insertInfo: configInsertInfo
+    ){
+        let documentNodeInfo: BTGlobalTreeNodeInfo = this.currentlySelectedNode;
+        // this.currentNodes.items.forEach((nodeItem: BTGlobalTreeNodeInfo)=>{
+        //   if(nodeItem.id == item.documentId)return documentNodeInfo = nodeItem;
+        // })
+        console.log(this.currentlySelectedNode,documentNodeInfo)
+        if(insertInfo.configList && insertInfo.configList.length > 0){
+          //Document has configurations
+          const documentNodeInfoConfig: BTGlobalTreeNodeInfo = documentNodeInfo as BTGlobalTreeNodeInfo
+          console.log(insertInfo)
+          let configInfo = {}
+          insertInfo.configList.forEach((elem)=>{
+            configInfo[elem.id] = elem.value;
+          })
+          documentNodeInfoConfig.configuration = JSON.stringify(configInfo);
+          
+          this.preferences.addRecentlyInserted(documentNodeInfoConfig)
+        }else{
+          this.preferences.addRecentlyInserted(documentNodeInfo as BTGlobalTreeNodeInfo) 
+        }
     }
 
     /**
@@ -1722,11 +1808,7 @@ export class App extends BaseApp {
             })
             .then(() => {
                 this.setInProgress(false);
-                let documentNodeInfo: BTGlobalTreeNodeInfo
-                this.currentNodes.items.forEach((nodeItem: BTGlobalTreeNodeInfo)=>{
-                  if(nodeItem.id == item.documentId)return documentNodeInfo = nodeItem;
-                })
-                this.preferences.addRecentlyInserted(documentNodeInfo)
+                this.proccessRecentlyInserted(item,insertInfo)
             })
             .catch((reason) => {
                 this.setInProgress(false);
@@ -1791,11 +1873,7 @@ export class App extends BaseApp {
             })
             .then(() => {
                 this.setInProgress(false);
-                let documentNodeInfo: BTGlobalTreeNodeInfo
-                this.currentNodes.items.forEach((nodeItem: BTGlobalTreeNodeInfo)=>{
-                  if(nodeItem.id == item.documentId)return documentNodeInfo = nodeItem;
-                })
-                this.preferences.addRecentlyInserted(documentNodeInfo)
+                this.proccessRecentlyInserted(item,insertInfo)
             })
             .catch((reason) => {
                 this.setInProgress(false);
@@ -1825,6 +1903,7 @@ export class App extends BaseApp {
     public processMagicNode(magic: string) {
         if (magic === 'RI') {
             this.preferences.getAllRecentlyInserted().then((res) => {
+              console.log(res)
                 const recentNode: BTGlobalTreeNodesInfo = {
                     pathToRoot: [
                         { jsonType: 'magic', id: magic, name: 'Recently Inserted' },

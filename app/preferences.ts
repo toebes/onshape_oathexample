@@ -263,6 +263,8 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
+            console.log(item)
+            //item should be BTGGlobalTreeNodeInfoConfig and "as" to BTGlobalTreeNodeInfo
             this.getAllRecentlyInserted().then((recentList:BTGlobalTreeNodeInfo[])=>{
               const newRecentList: BTGlobalTreeNodeInfo[] = [];
               let recentItem: BTGlobalTreeNodeInfo;
@@ -272,12 +274,11 @@ export class Preferences {
               for(let i in recentList){
                 recentItem = recentList[i];
                 duplicate = newRecentList.find((element:BTGlobalTreeNodeInfo)=>{
-                  return element.id == recentItem.id && element != recentItem//needs configurable check as well
+                  return element.id == recentItem.id && element != recentItem && element.configuration == recentItem.configuration//needs configurable check as well
                 })
                 if(duplicate == undefined)newRecentList.push(recentItem)
               }
               if(recentList.length >= limit)newRecentList.pop()
-              console.log(newRecentList)
               this.setBTGArray(name,newRecentList,libInfo)
             })
             resolve(false);
@@ -347,7 +348,7 @@ export class Preferences {
     public getBTGArray(
         pref_name: string,
         libInfo: BTGlobalTreeProxyInfo
-    ): Promise<Array<BTGlobalTreeNodeInfo>> {
+    ): Promise<Array<BTGlobalTreeNodeInfo | BTGlobalTreeNodeInfo>> {
         return new Promise((resolve, _reject) => {
             this.onshape.appElementApi
                 .getJson({
@@ -358,11 +359,11 @@ export class Preferences {
                 })
                 .then((res) => {
                     let result: Array<BTGlobalTreeNodeInfo> = [];
-                    console.log(res)
+                    console.log(res.tree)
                     for (let btg_json of res.tree[pref_name]) {
                         result.push(BTGlobalTreeProxyInfoJSONTyped(btg_json, false));
                     }
-
+                    console.log(result)
                     resolve(result);
                 })
                 .catch((err) => {
