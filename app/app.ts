@@ -236,6 +236,7 @@ export class App extends BaseApp {
                 });
         });
     }
+    currentBreadcrumbs: BTGlobalTreeNodeInfo[];
     /**
      * Set the breadcrumbs in the header
      * @param breadcrumbs Array of breadcrumbs (in reverse order)
@@ -245,6 +246,8 @@ export class App extends BaseApp {
         breadcrumbs: BTGlobalTreeNodeInfo[],
         teamroot?: BTGlobalTreeNodeInfo
     ): void {
+        // Store current breadcrumbs so we don't have to wait for promises later
+        this.currentBreadcrumbs = breadcrumbs;
         // Find where they want us to put the breadcrumbs
         const breadcrumbscontainer = document.getElementById('breadcrumbs');
         if (breadcrumbscontainer === undefined || breadcrumbscontainer === null) {
@@ -619,6 +622,15 @@ export class App extends BaseApp {
                 }
             }
             container.appendChild(rowelem);
+            if(this.currentBreadcrumbs[0].id == 'RI'){
+              //we are in recently inserted so we should render out the configurations
+              this.checkRenderConfig(itemInfo).then((res)=>{
+                if(res['status'] == true){
+                  rowelem.onclick = ()=>{}
+                  this.showItemChoices(item, res['res'], item, rowelem);
+                }
+              })
+            }
         });
     }
     /**
@@ -976,7 +988,40 @@ export class App extends BaseApp {
                 .catch((err) => reject(err));
         });
     }
-
+    /**
+     * Check if an item has configuration which will be rendered if present.
+     * @param item Item to check
+     */
+    public checkRenderConfig(itemRaw: BTDocumentSummaryInfo): Promise<Object> {
+      return new Promise((resolve,reject)=>{
+        this.resolveDocumentVersion(itemRaw).then((item) => {
+              this.getInsertChoices(item, this.targetDocumentElementInfo.elementType).then(
+                  (res) => {
+                      if (res.length === 1) {
+                          if (
+                              res[0].configurationParameters !== undefined &&
+                              res[0].configurationParameters !== null
+                          ) {
+                              resolve({
+                                status:true,
+                                res
+                              })
+                          }
+                      } else {
+                        resolve({
+                          status:true,
+                          res
+                        })
+                      }
+                      resolve({
+                        status:false,
+                        res
+                      })
+                  }
+              );
+          });
+      });
+  }
     /**
      * Check if an item can be inserted or if we have to prompt the user for more choices.
      * @param item Item to check
@@ -993,7 +1038,7 @@ export class App extends BaseApp {
                             res[0].configurationParameters !== undefined &&
                             res[0].configurationParameters !== null
                         ) {
-                            this.showItemChoices(item, res);
+                            this.showItemChoices(item, res, itemRaw);
                         } else {
                             // Perform an actual insert of an item. Note that we already know if we are
                             // going into a part studio or an assembly.
@@ -1006,7 +1051,7 @@ export class App extends BaseApp {
                             );
                         }
                     } else {
-                        this.showItemChoices(item, res);
+                        this.showItemChoices(item, res, itemRaw);
                     }
                 }
             );
@@ -1080,12 +1125,17 @@ export class App extends BaseApp {
      */
     public async showItemChoices(
         parent: BTDocumentSummaryInfo,
-        items: BTInsertableInfo[]
+        items: BTInsertableInfo[],
+        nodeInfo: BTGlobalTreeMagicNodeInfo,
+        appendAfter?: HTMLElement,
     ): Promise<void> {
         // Clean up the UI so we can populate it with the list
+        console.log(parent)
         let uiDiv = document.getElementById('dump');
         if (uiDiv !== null) {
-            uiDiv.innerHTML = '';
+          //if(we NOT are in recently inserted){
+          if(!appendAfter)uiDiv.innerHTML = ''; 
+          //}
         } else {
             uiDiv = document.body;
         }
@@ -1169,7 +1219,11 @@ export class App extends BaseApp {
         });
 
         itemParentRow.append(divParentTitle);
-        uiDiv.appendChild(itemTreeDiv);
+        if(appendAfter){
+          appendAfter.parentElement.insertBefore(itemTreeDiv,appendAfter.nextSibling);
+        }else{
+          uiDiv.appendChild(itemTreeDiv);
+        }
         let insertInfo: configInsertInfo = undefined;
 
         // Start the process off with the first in the magic list
@@ -1184,7 +1238,8 @@ export class App extends BaseApp {
                 insertInfo = await this.outputConfigurationOptions(
                     item,
                     index,
-                    itemParentGroup
+                    itemParentGroup,
+                    nodeInfo
                 );
             }
             // Now we need to output the actual item.
@@ -1212,7 +1267,7 @@ export class App extends BaseApp {
 
             if (configurable) {
                 childContainerDiv.onclick = () => {
-                    // this.currentlySelectedItem = item
+                    this.currentlySelectedNode = nodeInfo;
                     insertInfo.configList = this.getConfigValues(index);
                     this.insertToTarget(
                         this.documentId,
@@ -1381,7 +1436,8 @@ export class App extends BaseApp {
     public outputConfigurationOptions(
         item: BTInsertableInfo,
         index: number,
-        itemParentGroup: HTMLElement
+        itemParentGroup: HTMLElement,
+        nodeInfo: BTGlobalTreeNodeInfo
     ): Promise<configInsertInfo> {
         return new Promise((resolve, _reject) => {
             // We have two pieces of information that we can actually ask for in parallel
@@ -1438,10 +1494,11 @@ export class App extends BaseApp {
                     itemParentGroup.append(
                         genEnumOption(itemConfig, index, onchange, ongenerate)
                     );
-                    const currentlySelectedConfig = this.currentlySelectedNode['configuration']
+                    const currentlySelectedConfig = nodeInfo['configuration']
                     console.log(currentlySelectedConfig)
+                    console.log(item,nodeInfo)
                     if(currentlySelectedConfig){
-                        let savedConfigObject = JSON.parse(this.currentlySelectedNode['configuration']);
+                        let savedConfigObject = JSON.parse(currentlySelectedConfig);
                       // if(itemConfig.configurationParameters.length > 1){
                         console.log(savedConfigObject)
                         console.log(itemConfig)
