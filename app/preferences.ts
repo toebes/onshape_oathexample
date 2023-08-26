@@ -32,8 +32,8 @@ import { exists } from 'onshape-typescript-fetch/runtime';
 import { OnshapeAPI } from './onshapeapi';
 import {
     BTGlobalTreeNodeInfo,
-    GetAssociativeDataWvmEnum,
     BTGlobalTreeNodeInfoFromJSONTyped,
+    GetAssociativeDataWvmEnum,
 } from 'onshape-typescript-fetch';
 
 const PREFERENCE_FILE_NAME = '⚙ Preferences ⚙';
@@ -43,6 +43,11 @@ export interface BTGlobalTreeProxyInfo extends BTGlobalTreeNodeInfo {
     wvm?: typeof GetAssociativeDataWvmEnum;
     wvmid?: string;
     elementId?: string;
+}
+
+export interface BTGlobalTreeNodeConfigInfo extends BTGlobalTreeNodeInfo{
+  jsonType: string,//"document-summary-configured"
+  configuration?: string
 }
 
 export function BTGlobalTreeProxyInfoJSONTyped(
@@ -264,19 +269,18 @@ export class Preferences {
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
             console.log(item)
-            //item should be BTGGlobalTreeNodeInfoConfig and "as" to BTGlobalTreeNodeInfo
             this.getAllRecentlyInserted().then((recentList:BTGlobalTreeNodeInfo[])=>{
               const newRecentList: BTGlobalTreeNodeInfo[] = [];
-              let recentItem: BTGlobalTreeNodeInfo;
-              let duplicate: BTGlobalTreeNodeInfo;
-              recentList.unshift(item)
-              //Go through recentList and add all recentItems, whose ids are not already an id in newRecentList
+              let recentItem: BTGlobalTreeNodeConfigInfo;
+              let duplicate: BTGlobalTreeNodeConfigInfo;
+              //Iterate recentList and don't add duplicates to new list
+              recentList.unshift(item);
               for(let i in recentList){
                 recentItem = recentList[i];
-                duplicate = newRecentList.find((element:BTGlobalTreeNodeInfo)=>{
-                  return element.id == recentItem.id && element != recentItem && element.configuration == recentItem.configuration//needs configurable check as well
+                duplicate = newRecentList.find((element:BTGlobalTreeNodeConfigInfo)=>{
+                  return element.id === recentItem.id && element.configuration === recentItem.configuration//needs configurable check as well
                 })
-                if(duplicate == undefined)newRecentList.push(recentItem)
+                if(duplicate === undefined)newRecentList.push(recentItem)
               }
               if(recentList.length >= limit)newRecentList.pop()
               this.setBTGArray(name,newRecentList,libInfo)
@@ -293,6 +297,23 @@ export class Preferences {
     ): Promise<Array<BTGlobalTreeNodeInfo>> {
         return this.getBTGArray('recent', libInfo);
     }
+    /**
+     *  Get a recently inserted item by index.
+     * @returns
+     */
+    public getRecentlyInsertedByIndex(
+      index : number,
+      libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+  ): Promise<Array<BTGlobalTreeNodeInfo>> {
+      return new Promise((resolve,reject)=>{
+        this.getAllRecentlyInserted(libInfo).then((res)=>{
+        if(index >= res.length){
+          resolve(undefined);
+        }
+        resolve([res[index]]);
+      });
+    });
+  }
 
     /**
      * @param location Location to save - Array of BTGlobalTreeNodeInfo representing the full path to the location
