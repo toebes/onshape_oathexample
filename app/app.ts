@@ -1171,8 +1171,8 @@ export class App extends BaseApp {
         if (uiDiv === null) {
             uiDiv = document.body;
         }
-        if(clearParentElement){
-          uiDiv.innerHTML = '';
+        if (clearParentElement) {
+            uiDiv.innerHTML = '';
         }
         this.hidePopup();
         // This is what we are creating in the DOM
@@ -2016,11 +2016,9 @@ export class App extends BaseApp {
      * Process the results of the recently inserted node
      * @param index what index recently inserted node it should fetch and process
      */
-    public processRecentlyInsertedNode(
-        index?: number
-    ) {
+    public processRecentlyInsertedNode(index?: number) {
         this.preferences
-            .getRecentlyInsertedByIndex(index)
+            .getRecentlyInsertedByIndex(index, index === 0)//only refresh if we are getting first node
             .then((res: BTGlobalTreeNodeInfo[]) => {
                 if (res === undefined && res === undefined) {
                     return;
@@ -2144,7 +2142,7 @@ export class App extends BaseApp {
                     if (entry[0].isIntersecting) {
                         observer.disconnect();
                         rowelem.remove();
-                        this.processNextNodes(info,teamroot);
+                        this.processNextNodes(info, teamroot);
                     }
                 },
                 { threshold: [0] }

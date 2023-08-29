@@ -45,9 +45,9 @@ export interface BTGlobalTreeProxyInfo extends BTGlobalTreeNodeInfo {
     elementId?: string;
 }
 
-export interface BTGlobalTreeNodeConfigInfo extends BTGlobalTreeNodeInfo{
-  jsonType: string,//"document-summary-configured"
-  configuration?: string
+export interface BTGlobalTreeNodeConfigInfo extends BTGlobalTreeNodeInfo {
+    jsonType: string; //"document-summary-configured"
+    configuration?: string;
 }
 
 export function BTGlobalTreeProxyInfoJSONTyped(
@@ -268,23 +268,28 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            console.log(item)
-            this.getAllRecentlyInserted().then((recentList:BTGlobalTreeNodeInfo[])=>{
-              const newRecentList: BTGlobalTreeNodeInfo[] = [];
-              let recentItem: BTGlobalTreeNodeConfigInfo;
-              let duplicate: BTGlobalTreeNodeConfigInfo;
-              //Iterate recentList and don't add duplicates to new list
-              recentList.unshift(item);
-              for(let i in recentList){
-                recentItem = recentList[i];
-                duplicate = newRecentList.find((element:BTGlobalTreeNodeConfigInfo)=>{
-                  return element.id === recentItem.id && element.configuration === recentItem.configuration//needs configurable check as well
-                })
-                if(duplicate === undefined)newRecentList.push(recentItem)
-              }
-              if(recentList.length >= limit)newRecentList.pop()
-              this.setBTGArray(name,newRecentList,libInfo)
-            })
+            console.log(item);
+            this.getAllRecentlyInserted().then((recentList: BTGlobalTreeNodeInfo[]) => {
+                const newRecentList: BTGlobalTreeNodeInfo[] = [];
+                let recentItem: BTGlobalTreeNodeConfigInfo;
+                let duplicate: BTGlobalTreeNodeConfigInfo;
+                //Iterate recentList and don't add duplicates to new list
+                recentList.unshift(item);
+                for (let i in recentList) {
+                    recentItem = recentList[i];
+                    duplicate = newRecentList.find(
+                        (element: BTGlobalTreeNodeConfigInfo) => {
+                            return (
+                                element.id === recentItem.id &&
+                                element.configuration === recentItem.configuration
+                            ); //needs configurable check as well
+                        }
+                    );
+                    if (duplicate === undefined) newRecentList.push(recentItem);
+                }
+                if (recentList.length >= limit) newRecentList.pop();
+                this.setBTGArray(name, newRecentList, libInfo);
+            });
             resolve(false);
         });
     }
@@ -297,23 +302,32 @@ export class Preferences {
     ): Promise<Array<BTGlobalTreeNodeInfo>> {
         return this.getBTGArray('recent', libInfo);
     }
+    recentlyInsertedNodes: BTGlobalTreeNodeInfo[];
     /**
      *  Get a recently inserted item by index.
      * @returns
      */
     public getRecentlyInsertedByIndex(
-      index : number,
-      libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
-  ): Promise<Array<BTGlobalTreeNodeInfo>> {
-      return new Promise((resolve,reject)=>{
-        this.getAllRecentlyInserted(libInfo).then((res)=>{
-        if(index >= res.length){
-          resolve(undefined);
-        }
-        resolve([res[index]]);
-      });
-    });
-  }
+        index: number,
+        refreshNodeResults?: boolean,
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<Array<BTGlobalTreeNodeInfo>> {
+        return new Promise(async (resolve, reject) => {
+            if (refreshNodeResults === true) {
+                const result = await this.getAllRecentlyInserted(libInfo);
+                if (result === undefined || result.length === 0) {
+                    this.recentlyInsertedNodes = [];
+                    resolve(undefined);
+                }
+                this.recentlyInsertedNodes = result;
+            }
+            const currentNodes = this.recentlyInsertedNodes;
+            if (index >= currentNodes.length) {
+                resolve(undefined);
+            }
+            resolve([currentNodes[index]]);
+        });
+    }
 
     /**
      * @param location Location to save - Array of BTGlobalTreeNodeInfo representing the full path to the location
@@ -380,11 +394,11 @@ export class Preferences {
                 })
                 .then((res) => {
                     let result: Array<BTGlobalTreeNodeInfo> = [];
-                    console.log(res.tree)
+                    console.log(res.tree);
                     for (let btg_json of res.tree[pref_name]) {
                         result.push(BTGlobalTreeProxyInfoJSONTyped(btg_json, false));
                     }
-                    console.log(result)
+                    console.log(result);
                     resolve(result);
                 })
                 .catch((err) => {
