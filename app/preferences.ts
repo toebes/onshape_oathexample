@@ -45,11 +45,6 @@ export interface BTGlobalTreeProxyInfo extends BTGlobalTreeNodeInfo {
     elementId?: string;
 }
 
-export interface BTGlobalTreeNodeConfigInfo extends BTGlobalTreeNodeInfo {
-    jsonType: string; //"document-summary-configured"
-    configuration?: string;
-}
-
 export function BTGlobalTreeProxyInfoJSONTyped(
     json: any,
     ignoreDiscriminator: boolean
@@ -62,6 +57,25 @@ export function BTGlobalTreeProxyInfoJSONTyped(
         wvm: !exists(json, 'wvm') ? undefined : json['wvm'],
         wvmid: !exists(json, 'wvmid') ? undefined : json['wvmid'],
         elementId: !exists(json, 'elementId') ? undefined : json['elementId'],
+    };
+}
+
+export interface BTGlobalTreeNodeMagicDataInfo extends BTGlobalTreeNodeInfo {
+    jsonType: string; //"document-summary-configured"
+    configuration?: string;
+}
+
+export function BTGlobalTreeNodeMagicDataInfoJSONTyped(
+    json: any,
+    ignoreDiscriminator: boolean
+): BTGlobalTreeNodeMagicDataInfo {
+    if (json === undefined || json === null) {
+        return json;
+    }
+    return {
+        ...BTGlobalTreeProxyInfoJSONTyped(json, ignoreDiscriminator),
+        jsonType: !exists(json, 'jsonType') ? undefined : json['jsonType'],
+        configuration: !exists(json, 'configuration') ? undefined : json['configuration'],
     };
 }
 
@@ -256,7 +270,70 @@ export class Preferences {
     ): Promise<Array<BTGlobalTreeNodeInfo>> {
         return this.getBTGArray('home', libInfo);
     }
+    /**
+     * Add an item to the list of favorited items associated with the application.  Note that it only stores the last 50 sorted by date
+     * @param item Item to add to the insert list
+     */
+    public addFavorited(
+      item: BTGlobalTreeNodeMagicDataInfo,
+      limit: number = 50,
+      name: string = 'favorited',
+      libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+  ): Promise<boolean> {
+      return new Promise((resolve, _reject) => {
+          console.log(item);
+          this.getAllFavorited().then((favoriteList: BTGlobalTreeNodeInfo[]) => {
+              const newFavoriteList: BTGlobalTreeNodeInfo[] = [];
+              let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
+              let duplicate: BTGlobalTreeNodeMagicDataInfo;
+              //Iterate favoriteList and don't add duplicates to new list
+              favoriteList.unshift(item);
+              for (let i in favoriteList) {
+                  favoriteItem = favoriteList[i];
+                  duplicate = newFavoriteList.find(
+                      (element: BTGlobalTreeNodeMagicDataInfo) => {
+                          return (
+                              element.id === favoriteItem.id &&
+                              element.configuration === favoriteItem.configuration
+                          );
+                      }
+                  );
+                  if (duplicate === undefined) newFavoriteList.push(favoriteItem);
+              }
+              if (favoriteList.length >= limit) newFavoriteList.pop();//is this necessary?
+              this.setBTGArray(name, newFavoriteList, libInfo);
+          });
+          resolve(false);
+      });
+  }
 
+  /**
+     * Remove an item to the list of favorited items associated with the application.  Note that it only stores the last 50 sorted by date
+     * @param item Item to add to the insert list
+     */
+  public removeFavorited(
+    item: BTGlobalTreeNodeMagicDataInfo,
+    limit: number = 50,
+    name: string = 'favorited',
+    libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+): Promise<boolean> {
+    return new Promise((resolve, _reject) => {
+        console.log(item);
+        this.getAllFavorited().then((favoriteList: BTGlobalTreeNodeInfo[]) => {
+            const newFavoriteList: BTGlobalTreeNodeInfo[] = [];
+            let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
+            //iterate over favorites list and add all the items that aren't like item
+            for (let i in favoriteList) {
+                favoriteItem = favoriteList[i];
+                if(favoriteItem.id !== item.id || favoriteItem.configuration !== item.configuration){
+                  newFavoriteList.push(favoriteItem)
+                };
+            }
+            this.setBTGArray(name, newFavoriteList, libInfo);
+        });
+        resolve(false);
+    });
+}
     /**
      * Add an item to the list of recently inserted items associated with the application.  Note that it only stores the last 50 sorted by date
      * @param item Item to add to the insert list
@@ -271,14 +348,14 @@ export class Preferences {
             console.log(item);
             this.getAllRecentlyInserted().then((recentList: BTGlobalTreeNodeInfo[]) => {
                 const newRecentList: BTGlobalTreeNodeInfo[] = [];
-                let recentItem: BTGlobalTreeNodeConfigInfo;
-                let duplicate: BTGlobalTreeNodeConfigInfo;
+                let recentItem: BTGlobalTreeNodeMagicDataInfo;
+                let duplicate: BTGlobalTreeNodeMagicDataInfo;
                 //Iterate recentList and don't add duplicates to new list
                 recentList.unshift(item);
                 for (let i in recentList) {
                     recentItem = recentList[i];
                     duplicate = newRecentList.find(
-                        (element: BTGlobalTreeNodeConfigInfo) => {
+                        (element: BTGlobalTreeNodeMagicDataInfo) => {
                             return (
                                 element.id === recentItem.id &&
                                 element.configuration === recentItem.configuration
@@ -292,6 +369,11 @@ export class Preferences {
             });
             resolve(false);
         });
+    }
+    public getAllFavorited(
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<Array<BTGlobalTreeNodeInfo>> {
+        return this.getBTGArray('favorited', libInfo);
     }
     /**
      *  Last 50 entries sent to addRecentlyInserted sorted by date.
@@ -322,6 +404,30 @@ export class Preferences {
                 this.recentlyInsertedNodes = result;
             }
             const currentNodes = this.recentlyInsertedNodes;
+            if (index >= currentNodes.length) {
+                resolve(undefined);
+            }
+            resolve([currentNodes[index]]);
+        });
+    }
+
+    favoritedNodes: BTGlobalTreeNodeInfo[];
+
+    public getFavoritedByIndex(
+        index: number,
+        refreshNodeResults?: boolean,
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<Array<BTGlobalTreeNodeInfo>> {
+        return new Promise(async (resolve, reject) => {
+            if (refreshNodeResults === true) {
+                const result = await this.getAllFavorited(libInfo);
+                if (result === undefined || result.length === 0) {
+                    this.favoritedNodes = [];
+                    resolve(undefined);
+                }
+                this.favoritedNodes = result;
+            }
+            const currentNodes = this.favoritedNodes;
             if (index >= currentNodes.length) {
                 resolve(undefined);
             }
@@ -396,7 +502,7 @@ export class Preferences {
                     let result: Array<BTGlobalTreeNodeInfo> = [];
                     console.log(res.tree);
                     for (let btg_json of res.tree[pref_name]) {
-                        result.push(BTGlobalTreeProxyInfoJSONTyped(btg_json, false));
+                        result.push(BTGlobalTreeNodeMagicDataInfoJSONTyped(btg_json, false));
                     }
                     console.log(result);
                     resolve(result);

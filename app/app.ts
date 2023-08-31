@@ -29,6 +29,7 @@ import { BaseApp } from './baseapp';
 import {
     BTDocumentElementInfo,
     BTDocumentSummaryInfo,
+    BTFSValueUndefined2003FromJSON,
     BTGlobalTreeMagicNodeInfo,
     BTGlobalTreeNodeInfo,
     BTGlobalTreeNodesInfo,
@@ -56,7 +57,7 @@ import { JTTable } from './common/jttable';
 import { classListAdd, createDocumentElement, waitForTooltip } from './common/htmldom';
 import { genEnumOption } from './components/configurationoptions';
 import {
-    BTGlobalTreeNodeConfigInfo,
+    BTGlobalTreeNodeMagicDataInfo,
     BTGlobalTreeProxyInfo,
     BTGlobalTreeProxyInfoJSONTyped,
     Preferences,
@@ -141,6 +142,7 @@ export class App extends BaseApp {
             label: 'Custom table samples',
         },
         RI: { icon: 'svg-icon-recentlyOpened', label: 'Recently Inserted' },
+        FV: { icon: 'svg-icon-filter-favorite', label: 'Favorited' },
     };
     public preferences: Preferences;
     /**
@@ -154,6 +156,7 @@ export class App extends BaseApp {
                 // Create the main container
                 var div = createDocumentElement('div', { id: 'apptop' });
                 this.createPopupDialog(div);
+                this.createActionMenu(div);
 
                 // Create the main div that shows where we are
                 var bcdiv = createDocumentElement('div', {
@@ -611,6 +614,7 @@ export class App extends BaseApp {
                 waitForTooltip(
                     rowelem,
                     () => {
+                        if (this.getActionMenuVisible()) return;
                         let rect = rowelem.getBoundingClientRect();
                         this.showPopup(item, rect);
                     },
@@ -627,7 +631,14 @@ export class App extends BaseApp {
                 } else if (item.jsonType === 'document-summary') {
                     rowelem.onclick = () => {
                         this.hidePopup();
+                        this.hideActionMenu();
                         this.checkInsertItem(itemInfo, lastLoaded, rowContainer, true);
+                    };
+                    rowelem.oncontextmenu = (event) => {
+                        event.preventDefault();
+                        let rect = rowelem.getBoundingClientRect();
+                        this.showActionMenu(itemInfo, rect);
+                        this.hidePopup();
                     };
                 }
             }
@@ -785,6 +796,130 @@ export class App extends BaseApp {
          </div>`;
 
         parent.appendChild(popoverMainDiv);
+    }
+    /**
+     *
+     * @param item
+     */
+    public showActionMenu(item: BTGlobalTreeNodeMagicDataInfo, rect: DOMRect): void {
+        const actionMenu = document.getElementById('docactionmenu');
+        if (actionMenu !== null) {
+            const itemInfo = item as BTDocumentSummaryInfo;
+            // TODO: Same as popup, Move actionMenu above item if it doesn't fit below
+            actionMenu.style.left = String(rect.left) + 'px';
+            actionMenu.style.top = String(rect.bottom) + 'px';
+            actionMenu.style.width = String(rect.width) + 'px';
+            actionMenu.style.maxWidth = String(rect.width) + 'px';
+
+            this.setElemText('docactionmenu_name', item.name);
+
+            this.setElemText('docactionmenu_favorite', 'Loading favorited status...');
+
+            //TODO for loop for more actions, based on "global" object
+            //Include add to favorites
+            //Make all them onhovers turn them blue
+            document.getElementById('docactionmenu_report').onclick = () => {
+                document.location.href = [
+                    'mailto:',
+                    'degelew25106@student.cghsnc.org', //
+                    '?subject=',
+                    'Flaw in document ',
+                    item.name,
+                    '&body=',
+                    ' Document ',
+                    item.name,
+                    '(' + item.id + ')',
+                    ' has a flaw.',
+                ].join('');
+                this.hideActionMenu();
+            };
+
+            this.preferences
+                .getAllFavorited()
+                .then((favoriteList: BTGlobalTreeNodeMagicDataInfo[]) => {
+                    let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
+
+                    for (let i in favoriteList) {
+                        favoriteItem = favoriteList[i];
+                        if (
+                            favoriteItem.id === item.id &&
+                            favoriteItem.configuration === item.configuration
+                        ) {
+                            break;
+                        }else{
+                          favoriteItem = undefined;
+                        }
+                    }
+
+                    const itemFavorited = favoriteItem !== undefined;
+
+                    const favoritedStatus = itemFavorited
+                        ? ['Remove', 'from']
+                        : ['Add', 'to'];
+                    this.setElemText(
+                        'docactionmenu_favorite',
+                        `${favoritedStatus[0]} document ${favoritedStatus[1]} favorites`
+                    );
+
+                    document.getElementById('docactionmenu_close').onclick = () => {
+                        this.hideActionMenu();
+                    };
+
+                    document.getElementById('docactionmenu_favorite').onclick = () => {
+                        if (itemFavorited) {
+                            this.preferences.removeFavorited(item);
+                        } else {
+                            this.preferences.addFavorited(item);
+                        } 
+                        this.hideActionMenu();
+                    };
+                });
+
+            actionMenu.style.display = 'block';
+        }
+    }
+    public hideActionMenu(): void {
+        const actionMenu = document.getElementById('docactionmenu');
+        if (actionMenu !== null) {
+            actionMenu.style.display = 'none';
+        }
+    }
+    public getActionMenuVisible(): boolean {
+        if (document.getElementById('docactionmenu') !== undefined) {
+            return document.getElementById('docactionmenu').style.display !== 'none';
+        } else {
+            return false;
+        }
+    }
+    public createActionMenu(parent: HTMLElement): void {
+        const actionMenuMainDiv = createDocumentElement('div', {
+            id: 'docactionmenu',
+            class: 'popover popup bs-popover-bottom',
+        });
+        actionMenuMainDiv.innerHTML = `<div class="context-menu-list contextmenu-list list-has-icons context-menu-root">
+          <li class="context-menu-item" style="margin-right:10px;overflow:hidden"><span id="docactionmenu_name" class="popname" style="text-wrap:nowrap"></span></li>
+          <li id="docactionmenu_close" class="context-menu-item" style="position:absolute;right:0px;top:0px">🞬</li>
+          <li class="context-menu-item"><span id="docactionmenu_report" class="context-menu-item-span";>Report flaw in document</span></li>
+          <li class="context-menu-item context-menu-separator not-selectable"></li>
+          <li id="docactionmenu_favorite" class="context-menu-item"><span class="context-menu-item-span"></span></li>
+       </div>`;
+        //<div id="docactionmenu_desc" class="popdesc"></div>
+        // <div class="poplocdiv">
+        //    <span class="popttl">Location: </span>
+        //    <span id="docactionmenu_loc" class="poploc">LOCATION TBD</span>
+        // </div>
+        // <div class="popusergrp">
+        //    <strong>Owner:</strong> <span id="docactionmenu_owner"></span> created on <span id="docactionmenu_datecreate"></span>
+        // </div>
+        // <div class="popusergrp">
+        //    <strong>Modified:</strong> <span id="docactionmenu_lastmod"></span> by <span id="docactionmenu_modifier"></span>
+        // </div>
+        // <div class="poppermit">
+        //    <strong>Permissions:</strong> <span id="docactionmenu_permissions" class="popperm">LOCATION TBD</span>
+        // </div>
+
+        parent.appendChild(actionMenuMainDiv);
+        this.hideActionMenu();
     }
     /**
      * Get the elements in a document
@@ -1322,7 +1457,6 @@ export class App extends BaseApp {
                     );
                 };
             }
-
             itemParentGroup.append(childContainerDiv);
         });
         //}
@@ -1746,8 +1880,8 @@ export class App extends BaseApp {
         console.log(documentNodeInfo);
         if (insertInfo.configList && insertInfo.configList.length > 0) {
             //Document has configurations
-            const documentNodeInfoConfig: BTGlobalTreeNodeConfigInfo =
-                documentNodeInfo as BTGlobalTreeNodeConfigInfo;
+            const documentNodeInfoConfig: BTGlobalTreeNodeMagicDataInfo =
+                documentNodeInfo as BTGlobalTreeNodeMagicDataInfo;
             console.log(insertInfo);
             let configInfo = {};
             insertInfo.configList.forEach((elem) => {
@@ -2016,9 +2150,37 @@ export class App extends BaseApp {
      * Process the results of the recently inserted node
      * @param index what index recently inserted node it should fetch and process
      */
-    public processRecentlyInsertedNode(index?: number) {
+    public processFavoritedNode(index?: number, refreshNodes?: boolean) {
         this.preferences
-            .getRecentlyInsertedByIndex(index, index === 0)//only refresh if we are getting first node
+            .getFavoritedByIndex(index, refreshNodes === true) //only refresh if we are getting first node
+            .then((res: BTGlobalTreeNodeInfo[]) => {
+                if (res === undefined && res === undefined) {
+                    return;
+                }
+                const recentNode: BTGlobalTreeNodesInfo = {
+                    pathToRoot: [
+                        {
+                            jsonType: 'magic',
+                            resourceType: 'magic',
+                            id: 'FV',
+                            name: 'Favorited',
+                        },
+                    ],
+                    next: (index + 1).toString(),
+                    href: undefined,
+                    items: res,
+                };
+                this.setBreadcrumbs(recentNode.pathToRoot);
+                this.ProcessNodeResults(recentNode, undefined, true);
+            });
+    }
+    /**
+     * Process the results of the recently inserted node
+     * @param index what index recently inserted node it should fetch and process
+     */
+    public processRecentlyInsertedNode(index?: number, refreshNodes?: boolean) {
+        this.preferences
+            .getRecentlyInsertedByIndex(index, refreshNodes === true) //only refresh if we are getting first node
             .then((res: BTGlobalTreeNodeInfo[]) => {
                 if (res === undefined && res === undefined) {
                     return;
@@ -2046,7 +2208,10 @@ export class App extends BaseApp {
      */
     public processMagicNode(magic: string) {
         if (magic === 'RI') {
-            this.processRecentlyInsertedNode(0);
+            this.processRecentlyInsertedNode(0, true);
+            return;
+        } else if (magic === 'FV') {
+            this.processFavoritedNode(0, true);
             return;
         }
         // uri: string) {
@@ -2095,7 +2260,11 @@ export class App extends BaseApp {
                 break;
             }
             case 'magic': {
-                this.processRecentlyInsertedNode(parseInt(info.next));
+                if (info.pathToRoot[0].id == 'RI') {
+                    this.processRecentlyInsertedNode(parseInt(info.next));
+                } else if (info.pathToRoot[0].id == 'FV') {
+                    this.processFavoritedNode(parseInt(info.next));
+                }
                 break;
             }
         }
@@ -2111,7 +2280,6 @@ export class App extends BaseApp {
         teamroot?: BTGlobalTreeNodeInfo,
         subsetConfigurables?: boolean
     ) {
-        console.log(info);
         const nodes = info as BTGlobalTreeNodesInfo;
         // When it does, append all the elements to the UI
         this.appendElements(nodes.items, teamroot, subsetConfigurables);
@@ -2157,6 +2325,7 @@ export class App extends BaseApp {
      */
     public gotoFolder(item: BTGlobalTreeNodeInfo, teamroot?: BTGlobalTreeNodeInfo): void {
         this.hidePopup();
+        this.hideActionMenu();
 
         this.saveLastLocation({ folder: item, teamroot: teamroot });
 
