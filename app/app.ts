@@ -47,6 +47,7 @@ import {
     BTMParameterQueryList148,
     BTMParameterString149,
     BTPExpressionSwitch2632ToJSON,
+    BTSingleAssemblyReferenceDisplayData1557AllOfFromJSONTyped,
     BTThumbnailInfo,
     GBTElementType,
     GetInsertablesRequest,
@@ -62,6 +63,7 @@ import {
     BTGlobalTreeProxyInfoJSONTyped,
     Preferences,
 } from './preferences';
+import { Library } from './libraries';
 export interface magicIconInfo {
     label: string;
     icon: OnshapeSVGIcon;
@@ -93,12 +95,28 @@ export interface folderLocation {
     teamroot: BTGlobalTreeNodeInfo;
 }
 
+export interface actionMenuOptionInfo {
+    parentType: string[];
+    documentType?: string[];
+    name: string;
+    label?: string;
+    element?: Element;
+    input?: actionMenuOptionInputInfo[];
+}
+
+export interface actionMenuOptionInputInfo {
+    name: string;
+    label: string;
+    type: string;
+}
+
 export class App extends BaseApp {
     public myserver = 'https://ftconshape.com/insertwork';
     public magic = 1;
     public loaded = 0;
     public loadedlimit = 2500; // Maximum number of items we will load
     public targetDocumentElementInfo: BTDocumentElementInfo = {};
+    public appName: string = 'insert_work';
 
     public insertToTarget: (
         documentId: string,
@@ -143,15 +161,107 @@ export class App extends BaseApp {
         },
         RI: { icon: 'svg-icon-recentlyOpened', label: 'Recently Inserted' },
         FV: { icon: 'svg-icon-filter-favorite', label: 'Favorited' },
+        LI: { icon: 'svg-icon-libraries', label: 'My Libraries' },
+    };
+    public actionMenuOptions: { [item: string]: actionMenuOptionInfo } = {
+        NAME: {
+            parentType: ['any'],
+            name: 'name',
+            documentType: ['document-summary', 'document-config', 'magic'],
+            label: 'Name',
+        },
+        REHOME: {
+            parentType: ['home'],
+            documentType: ['magic'],
+            name: 'removehome',
+            label: 'Remove from home',
+        },
+        REPORT: {
+            parentType: ['any'],
+            documentType: ['document-summary', 'document-summary-config'],
+            name: 'report',
+            label: 'Report flaw in document',
+        },
+        FAVORITE: {
+            parentType: ['any'],
+            documentType: ['document-summary'],
+            name: 'favorite',
+            label: 'Loading favorite status...',
+        },
+        ADDLIB: {
+            parentType: ['any'],
+            documentType: ['any', 'proxy-library'],
+            name: 'addproxylibrary',
+            label: 'Add proxy library',
+        },
+        CREATELIB: {
+            parentType: ['home'],
+            documentType: ['LI'],
+            name: 'createproxylibrary',
+            label: 'Create proxy library',
+            input: [
+                {
+                    name: 'lib-name',
+                    label: 'Library Name',
+                    type: 'text',
+                },
+            ],
+        },
+        ADDLIBDOC: {
+            parentType: ['any'],
+            documentType: ['document-summary'],
+            name: 'adddocumenttolibrary',
+            label: 'Add document to library',
+            input: [
+                {
+                    name: 'lib-name',
+                    label: 'Library Name',
+                    type: 'text',
+                },
+            ],
+        },
+        ADDPROXYDOC: {
+            parentType: ['any'],
+            documentType: ['document-summary'],
+            name: 'adddocumenttoproxy',
+            label: 'Add document to proxy',
+            input: [
+                {
+                    name: 'lib-name',
+                    label: 'Library Name',
+                    type: 'text',
+                },
+                {
+                    name: 'proxy-name',
+                    label: 'Proxy Name',
+                    type: 'text',
+                },
+            ],
+        },
+        CREATEPROXY: {
+            parentType: ['any'],
+            documentType: ['proxy-library'],
+            name: 'createproxyfolder',
+            label: 'Create proxy folder for library',
+            input: [
+                {
+                    name: 'proxy-name',
+                    label: 'Proxy Name',
+                    type: 'text',
+                },
+            ],
+        },
     };
     public preferences: Preferences;
+    public libraries: Library;
     /**
      * The main entry point for an app
      */
     public startApp(): void {
+        this.libraries = new Library(this.onshape, this.appName);
         this.preferences = new Preferences(this.onshape);
         this.preferences
-            .initUserPreferences('insert_work')
+            .initUserPreferences(this.appName)
             .then((_val) => {
                 // Create the main container
                 var div = createDocumentElement('div', { id: 'apptop' });
@@ -262,6 +372,7 @@ export class App extends BaseApp {
             // If we don't have a place for it, just skip out
             return;
         }
+        this.currentBreadcrumbs = breadcrumbs
         // This is what Onshape Generates
         //
         // <span ng-if="!documentSearch.searchText" class="documents-filter-heading spaced-filter-name">
@@ -512,16 +623,27 @@ export class App extends BaseApp {
                 const row = table.addBodyRow();
                 const span = createDocumentElement('span');
                 const icon = createSVGIcon(magicinfo.icon, 'documents-filter-icon');
-                icon.onclick = () => {
+                const onclick = () => {
                     this.gotoFolder(magicNode);
                 };
+                const oncontextmenu = (event) => {
+                    event.preventDefault();
+                    let rect = textspan.getBoundingClientRect();
+                    this.showActionMenu(
+                        magicNode,
+                        { id: 'home', jsonType: 'magic' },
+                        rect
+                    );
+                    this.hidePopup();
+                };
+                icon.onclick = onclick;
+                icon.oncontextmenu = oncontextmenu;
                 span.appendChild(icon);
                 const textspan = createDocumentElement('span', {
                     textContent: magicinfo.label,
                 });
-                textspan.onclick = () => {
-                    this.gotoFolder(magicNode);
-                };
+                textspan.onclick = onclick;
+                textspan.oncontextmenu = oncontextmenu;
                 span.appendChild(textspan);
                 row.add(span);
             }
@@ -537,6 +659,7 @@ export class App extends BaseApp {
      */
     public appendElements(
         items: BTGlobalTreeMagicNodeInfo[],
+        parentNode: BTGlobalTreeNodeInfo,
         teamroot: BTGlobalTreeNodeInfo,
         subsetConfigurables: boolean
     ): void {
@@ -557,6 +680,12 @@ export class App extends BaseApp {
             // <td class="os-documents-thumbnail-column os-document-folder-thumbnail-column document-item"><svg class="os-svg-icon folder-list-icon"><use href="#svg-icon-folder"></use></svg></td>
             // <td class="os-document-name document-item">Visor - John Toebes</td></tr></tbody></table>
             ////
+            const libraryName = this.libraries.getLibraryName(item.name);
+            if (libraryName !== undefined) {
+                item.jsonType = 'proxy-library'; //just make sure
+                item.isContainer = true; //also to make sure
+                item.name = libraryName; //so it renders correctly
+            }
 
             const lastLoaded = this.loaded;
             const rowContainer = createDocumentElement('div');
@@ -580,6 +709,8 @@ export class App extends BaseApp {
             let img = undefined;
             if (item.jsonType === 'team-summary') {
                 img = createSVGIcon('svg-icon-team', 'folder-list-icon');
+            } else if (item.jsonType === 'proxy-library') {
+                img = createSVGIcon('svg-icon-library', 'folder-list-icon');
             } else if (item.isContainer) {
                 // if item is container
                 img = createSVGIcon('svg-icon-folder', 'folder-list-icon');
@@ -624,6 +755,12 @@ export class App extends BaseApp {
                 );
             };
             if (selectable) {
+                rowelem.oncontextmenu = (event) => {
+                    event.preventDefault();
+                    let rect = rowelem.getBoundingClientRect();
+                    this.showActionMenu(itemInfo, parentNode, rect);
+                    this.hidePopup();
+                };
                 if (item.isContainer) {
                     rowelem.onclick = () => {
                         this.gotoFolder(item, teamroot);
@@ -633,12 +770,6 @@ export class App extends BaseApp {
                         this.hidePopup();
                         this.hideActionMenu();
                         this.checkInsertItem(itemInfo, lastLoaded, rowContainer, true);
-                    };
-                    rowelem.oncontextmenu = (event) => {
-                        event.preventDefault();
-                        let rect = rowelem.getBoundingClientRect();
-                        this.showActionMenu(itemInfo, rect);
-                        this.hidePopup();
                     };
                 }
             }
@@ -801,79 +932,324 @@ export class App extends BaseApp {
      *
      * @param item
      */
-    public showActionMenu(item: BTGlobalTreeNodeMagicDataInfo, rect: DOMRect): void {
+    public showActionMenu(
+        item: BTGlobalTreeNodeMagicDataInfo,
+        parentNode: BTGlobalTreeNodeInfo,
+        rect: DOMRect
+    ): void {
         const actionMenu = document.getElementById('docactionmenu');
         if (actionMenu !== null) {
             const itemInfo = item as BTDocumentSummaryInfo;
             // TODO: Same as popup, Move actionMenu above item if it doesn't fit below
             actionMenu.style.left = String(rect.left) + 'px';
             actionMenu.style.top = String(rect.bottom) + 'px';
-            actionMenu.style.width = String(rect.width) + 'px';
-            actionMenu.style.maxWidth = String(rect.width) + 'px';
+            actionMenu.style.width = String(Math.max(200, rect.width)) + 'px';
+            actionMenu.style.maxWidth = String(Math.max(200, rect.width)) + 'px';
 
-            this.setElemText('docactionmenu_name', item.name);
+            const actionMenuDiv = actionMenu.firstChild;
 
-            this.setElemText('docactionmenu_favorite', 'Loading favorited status...');
+            //Prune seperators
+            actionMenuDiv.childNodes.forEach((elem) => {
+                if (
+                    elem['className'] ===
+                    'context-menu-item context-menu-separator not-selectable'
+                ) {
+                    actionMenuDiv.removeChild(elem);
+                }
+            });
 
-            //TODO for loop for more actions, based on "global" object
-            //Include add to favorites
-            //Make all them onhovers turn them blue
-            document.getElementById('docactionmenu_report').onclick = () => {
-                document.location.href = [
-                    'mailto:',
-                    'degelew25106@student.cghsnc.org', //
-                    '?subject=',
-                    'Flaw in document ',
-                    item.name,
-                    '&body=',
-                    ' Document ',
-                    item.name,
-                    '(' + item.id + ')',
-                    ' has a flaw.',
-                ].join('');
+            console.log(item);
+            for (const id in this.actionMenuOptions) {
+                const option = this.actionMenuOptions[id];
+                const optionId = 'docactionmenu_' + option.name;
+                const optionElement = document.getElementById(optionId);
+                optionElement.parentElement.style.display = 'inherit';
+                console.log(option, item, parentNode);
+
+                let inputDiv: HTMLElement;
+                let submitElement: HTMLButtonElement;
+
+                if (option.input !== undefined) {
+                    inputDiv = document.getElementById(optionId + '_inputdiv');
+                    submitElement = document.getElementById(
+                        optionId + '_submit'
+                    ) as HTMLButtonElement;
+                }
+
+                //Make sure that items's type is allowed for this option
+                if (option.documentType && option.documentType[0] !== 'any') {
+                    let correctPlacement = false;
+                    option.documentType.forEach((allowedType) => {
+                        if (allowedType === item.jsonType || allowedType === item.id)
+                            correctPlacement = true;
+                    });
+                    if (!correctPlacement) {
+                        optionElement.parentElement.style.display = 'none';
+                        continue;
+                    }
+                }
+
+                //Make sure that parentNode's type is allowed for this option
+                //Magic types can be vague and have their ids a better representation of what document
+                if (option.parentType && option.parentType[0] !== 'any') {
+                    let correctPlacement = false;
+                    option.parentType.forEach((allowedType) => {
+                        if (
+                            allowedType === parentNode.jsonType ||
+                            allowedType === parentNode.id
+                        )
+                            correctPlacement = true;
+                    });
+                    if (!correctPlacement) {
+                        optionElement.parentElement.style.display = 'none';
+                        continue;
+                    }
+                }
+                switch (id) {
+                    case 'NAME': {
+                        if (item.jsonType === 'magic') {
+                            this.setElemText(optionId, this.magicInfo[item.id].label);
+                        } else {
+                            this.setElemText(optionId, item.name);
+                        }
+                        break;
+                    }
+                    case 'FAVORITE': {
+                        this.setElemText(optionId, 'Loading favorited status...');
+                        this.preferences
+                            .getAllFavorited()
+                            .then((favoriteList: BTGlobalTreeNodeMagicDataInfo[]) => {
+                                let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
+
+                                for (let i in favoriteList) {
+                                    favoriteItem = favoriteList[i];
+                                    if (
+                                        favoriteItem.id === item.id &&
+                                        favoriteItem.configuration === item.configuration
+                                    ) {
+                                        break;
+                                    } else {
+                                        favoriteItem = undefined;
+                                    }
+                                }
+
+                                const itemFavorited = favoriteItem !== undefined;
+
+                                const favoritedStatus = itemFavorited
+                                    ? ['Remove', 'from']
+                                    : ['Add', 'to'];
+                                this.setElemText(
+                                    optionId,
+                                    `${favoritedStatus[0]} document ${favoritedStatus[1]} favorites`
+                                );
+
+                                optionElement.onclick = () => {
+                                    if (itemFavorited) {
+                                        this.preferences.removeFavorited(item);
+                                    } else {
+                                        this.preferences.addFavorited(item);
+                                    }
+                                    this.hideActionMenu();
+                                };
+                            });
+                        break;
+                    }
+                    case 'REPORT': {
+                        optionElement.onclick = () => {
+                            this.hideActionMenuOptionInputs();
+                            document.location.href = [
+                                'mailto:',
+                                'degelew25106@student.cghsnc.org', //
+                                '?subject=',
+                                'Flaw in document ',
+                                item.name,
+                                '&body=',
+                                ' Document ',
+                                item.name,
+                                '(' + item.id + ')',
+                                ' has a flaw.',
+                            ].join('');
+                            this.hideActionMenu();
+                        };
+                        break;
+                    }
+                    case 'ADDLIB': {
+                        this.setElemText(optionId, 'Loading library status...');
+                        this.preferences
+                            .getAllLibraries()
+                            .then((libraryList: BTGlobalTreeNodeMagicDataInfo[]) => {
+                                let libraryItem: BTGlobalTreeNodeMagicDataInfo;
+
+                                for (let i in libraryList) {
+                                    libraryItem = libraryList[i];
+                                    if (
+                                        libraryItem.id === item.id &&
+                                        libraryItem.configuration === item.configuration
+                                    ) {
+                                        break;
+                                    } else {
+                                        libraryItem = undefined;
+                                    }
+                                }
+
+                                const itemInLibrary = libraryItem !== undefined;
+                                console.log(itemInLibrary);
+                                const libraryStatus = itemInLibrary
+                                    ? ['Remove', 'from']
+                                    : ['Add', 'to'];
+                                this.setElemText(
+                                    optionId,
+                                    `${libraryStatus[0]} document ${libraryStatus[1]} libraries`
+                                );
+
+                                optionElement.onclick = () => {
+                                    if (itemInLibrary) {
+                                        this.preferences.removeLibrary(item);
+                                    } else {
+                                        this.preferences.addLibrary(item);
+                                    }
+                                    this.hideActionMenu();
+                                };
+                            });
+                        break;
+                    }
+                    case 'CREATELIB': {
+                        optionElement.onclick = () => {
+                            const inputElement = document.getElementById(
+                                optionId + '_lib-name'
+                            ) as HTMLInputElement;
+                            inputDiv.style.display = 'flex';
+                            submitElement.onclick = (e) => {
+                                e.preventDefault();
+                                this.libraries
+                                    .createProxyLibrary(
+                                        // this.currentBreadcrumbs[0],
+                                        undefined,
+                                        inputElement.value
+                                    )
+                                    .then((library) => {
+                                        this.preferences.addLibrary(library);
+                                        this.hideActionMenu();
+                                    });
+                            };
+                        };
+                        break;
+                    }
+                    case 'CREATEPROXY': {
+                        optionElement.onclick = () => {
+                            const inputProxyElement = document.getElementById(
+                                optionId + '_proxy-name'
+                            ) as HTMLInputElement;
+                            inputDiv.style.display = 'flex';
+                            submitElement.onclick = (e) => {
+                                e.preventDefault();
+                                if (inputProxyElement.value == '') {
+                                    //alert user that input must be filled
+                                    return;
+                                }
+                                this.libraries.getProxyLibrary(item.name).then((res) => {
+                                    if (res !== undefined) {
+                                        this.libraries.createProxyFolder(
+                                            res.library,
+                                            inputProxyElement.value
+                                        );
+                                        this.hideActionMenuOptionInputs();
+                                    } else {
+                                        //alert user that library is invalid
+                                    }
+                                });
+                            };
+                        };
+                        break;
+                    }
+                    case 'ADDLIBDOC': {
+                        optionElement.onclick = () => {
+                            const inputLibElement = document.getElementById(
+                                optionId + '_lib-name'
+                            ) as HTMLInputElement;
+                            inputDiv.style.display = 'flex';
+                            submitElement.onclick = (e) => {
+                                e.preventDefault();
+                                if (inputLibElement.value === '') {
+                                    //alert user that input must be filled
+                                    return;
+                                }
+                                this.libraries.addNodeToProxyLibrary(
+                                    item,
+                                    inputLibElement.value
+                                );
+                                this.hideActionMenuOptionInputs();
+                            };
+                        };
+
+                        break;
+                    }
+                    case 'ADDPROXYDOC': {
+                        optionElement.onclick = () => {
+                            const inputLibElement = document.getElementById(
+                                optionId + '_lib-name'
+                            ) as HTMLInputElement;
+                            const inputProxyElement = document.getElementById(
+                                optionId + '_proxy-name'
+                            ) as HTMLInputElement;
+                            inputDiv.style.display = 'flex';
+                            submitElement.onclick = (e) => {
+                                e.preventDefault();
+                                if (
+                                    inputLibElement.value === '' ||
+                                    inputProxyElement.value === ''
+                                ) {
+                                    //alert user that input must be filled
+                                    return;
+                                }
+                                this.libraries
+                                    .getProxyLibrary(inputLibElement.value)
+                                    .then((res) => {
+                                        if (res !== undefined) {
+                                            this.libraries.addNodeToProxyFolder(
+                                                item,
+                                                res.library,
+                                                {
+                                                    jsonType: 'proxy-folder',
+                                                    name: inputProxyElement.value,
+                                                }
+                                            );
+                                            this.hideActionMenuOptionInputs();
+                                        } else {
+                                            //alert user that library is invalid
+                                        }
+                                    });
+                            };
+                        };
+                        break;
+                    }
+                }
+
+                if (id !== 'NAME') {
+                    optionElement.parentElement.onmouseover = () => {
+                        optionElement.parentElement.className = 'context-menu-item hover';
+                    };
+                    optionElement.parentElement.onmouseleave = () => {
+                        optionElement.parentElement.className = 'context-menu-item';
+                    };
+                    //Add seperators back
+                    actionMenuDiv.insertBefore(
+                        createDocumentElement('li', {
+                            class: 'context-menu-item context-menu-separator not-selectable',
+                        }),
+                        optionElement.parentElement
+                    );
+                }
+            }
+            document.getElementById('docactionmenu_close').onclick = () => {
                 this.hideActionMenu();
             };
-
-            this.preferences
-                .getAllFavorited()
-                .then((favoriteList: BTGlobalTreeNodeMagicDataInfo[]) => {
-                    let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
-
-                    for (let i in favoriteList) {
-                        favoriteItem = favoriteList[i];
-                        if (
-                            favoriteItem.id === item.id &&
-                            favoriteItem.configuration === item.configuration
-                        ) {
-                            break;
-                        }else{
-                          favoriteItem = undefined;
-                        }
-                    }
-
-                    const itemFavorited = favoriteItem !== undefined;
-
-                    const favoritedStatus = itemFavorited
-                        ? ['Remove', 'from']
-                        : ['Add', 'to'];
-                    this.setElemText(
-                        'docactionmenu_favorite',
-                        `${favoritedStatus[0]} document ${favoritedStatus[1]} favorites`
-                    );
-
-                    document.getElementById('docactionmenu_close').onclick = () => {
-                        this.hideActionMenu();
-                    };
-
-                    document.getElementById('docactionmenu_favorite').onclick = () => {
-                        if (itemFavorited) {
-                            this.preferences.removeFavorited(item);
-                        } else {
-                            this.preferences.addFavorited(item);
-                        } 
-                        this.hideActionMenu();
-                    };
-                });
+            if (
+                actionMenuDiv.lastChild['className'] ===
+                'context-menu-item context-menu-separator not-selectable'
+            ) {
+                actionMenuDiv.removeChild(actionMenuDiv.lastChild);
+            }
 
             actionMenu.style.display = 'block';
         }
@@ -882,6 +1258,29 @@ export class App extends BaseApp {
         const actionMenu = document.getElementById('docactionmenu');
         if (actionMenu !== null) {
             actionMenu.style.display = 'none';
+        }
+        this.hideActionMenuOptionInputs();
+    }
+    public hideActionMenuOptionInputs(): void {
+        const actionMenu = document.getElementById('docactionmenu');
+        if (actionMenu !== null) {
+            for (const id in this.actionMenuOptions) {
+                const option = this.actionMenuOptions[id];
+                const optionId = 'docactionmenu_' + option.name;
+
+                if (option.input !== undefined) {
+                    document.getElementById(optionId + '_inputdiv').style.display =
+                        'none';
+                    for (let input of option.input) {
+                        const inputElement = document.getElementById(
+                            'docactionmenu_' + option.name + '_' + input.name
+                        ) as HTMLInputElement;
+                        if (inputElement !== undefined) {
+                            inputElement.value = '';
+                        }
+                    }
+                }
+            }
         }
     }
     public getActionMenuVisible(): boolean {
@@ -896,31 +1295,85 @@ export class App extends BaseApp {
             id: 'docactionmenu',
             class: 'popover popup bs-popover-bottom',
         });
-        actionMenuMainDiv.innerHTML = `<div class="context-menu-list contextmenu-list list-has-icons context-menu-root">
-          <li class="context-menu-item" style="margin-right:10px;overflow:hidden"><span id="docactionmenu_name" class="popname" style="text-wrap:nowrap"></span></li>
-          <li id="docactionmenu_close" class="context-menu-item" style="position:absolute;right:0px;top:0px">🞬</li>
-          <li class="context-menu-item"><span id="docactionmenu_report" class="context-menu-item-span";>Report flaw in document</span></li>
-          <li class="context-menu-item context-menu-separator not-selectable"></li>
-          <li id="docactionmenu_favorite" class="context-menu-item"><span class="context-menu-item-span"></span></li>
-       </div>`;
-        //<div id="docactionmenu_desc" class="popdesc"></div>
-        // <div class="poplocdiv">
-        //    <span class="popttl">Location: </span>
-        //    <span id="docactionmenu_loc" class="poploc">LOCATION TBD</span>
-        // </div>
-        // <div class="popusergrp">
-        //    <strong>Owner:</strong> <span id="docactionmenu_owner"></span> created on <span id="docactionmenu_datecreate"></span>
-        // </div>
-        // <div class="popusergrp">
-        //    <strong>Modified:</strong> <span id="docactionmenu_lastmod"></span> by <span id="docactionmenu_modifier"></span>
-        // </div>
-        // <div class="poppermit">
-        //    <strong>Permissions:</strong> <span id="docactionmenu_permissions" class="popperm">LOCATION TBD</span>
-        // </div>
+        let actionMenuDiv = createDocumentElement('div', {
+            class: 'context-menu-list contextmenu-list list-has-icons context-menu-root',
+        });
+
+        const closeActionMenu = createDocumentElement('li', {
+            id: 'docactionmenu_close',
+            class: 'context-menu-item',
+            style: 'position:absolute;right:0px;top:0px;padding-right:3px;z-index:1;',
+            textContent: '🞬',
+        });
+        closeActionMenu.onclick = () => {
+            this.hideActionMenu();
+            this.hideActionMenuOptionInputs();
+        };
+        actionMenuDiv.appendChild(closeActionMenu);
+
+        for (const id in this.actionMenuOptions) {
+            const option = this.actionMenuOptions[id];
+            const actionMenuOptionList = createDocumentElement('li', {
+                class: 'context-menu-item',
+            });
+            const actionMenuOptionSpan = createDocumentElement('span', {
+                id: 'docactionmenu_' + option.name,
+                textContent: option.label,
+            });
+            actionMenuOptionList.appendChild(actionMenuOptionSpan);
+            if (option.input !== undefined) {
+                const actionMenuOptionInputParentDiv = createDocumentElement('div', {
+                    id: 'docactionmenu_' + option.name + '_inputdiv',
+                    style: 'display:none;flex-direction:column;',
+                });
+                for (let input of option.input) {
+                    const actionMenuOptionInputDiv = createDocumentElement('div', {
+                        // class:
+                        style: 'flex-direction: row;align-items: flex-start;',
+                    });
+                    const actionMenuOptionInputLabel = createDocumentElement('label', {
+                        textContent: input.label + ': ',
+                        style: 'text-wrap: nowrap;',
+                    });
+                    actionMenuOptionInputDiv.appendChild(actionMenuOptionInputLabel);
+                    const actionMenuOptionInputInput = createDocumentElement('input', {
+                        id: 'docactionmenu_' + option.name + '_' + input.name,
+                        style: 'width: 5em;height: 1.5em;border: solid black 1px;border-top: 0px;border-left: 0px;border-right: 0px;outline: none;',
+                    });
+
+                    actionMenuOptionInputDiv.appendChild(actionMenuOptionInputInput);
+                    actionMenuOptionInputParentDiv.appendChild(actionMenuOptionInputDiv);
+                }
+                const actionMenuOptionInputSubmit = createDocumentElement('button', {
+                    id: 'docactionmenu_' + option.name + '_submit',
+                    textContent: 'Enter',
+                    style: 'border: solid gray 1px;background: rgb(232 232 232);',
+                });
+                actionMenuOptionInputParentDiv.appendChild(actionMenuOptionInputSubmit);
+                actionMenuOptionList.appendChild(actionMenuOptionInputParentDiv);
+            }
+            switch (id) {
+                case 'NAME': {
+                    actionMenuOptionSpan.className += 'popname';
+                    actionMenuOptionList.style.marginRight = '15px';
+                    actionMenuOptionList.style.overflow = 'hidden';
+                    actionMenuOptionList.style.paddingRight = '2px';
+                    actionMenuOptionSpan.style.cssText = 'text-wrap:nowrap';
+                    break;
+                }
+                case '': {
+                    break;
+                }
+            }
+            actionMenuDiv.appendChild(actionMenuOptionList);
+        }
+        actionMenuMainDiv.appendChild(actionMenuDiv);
 
         parent.appendChild(actionMenuMainDiv);
         this.hideActionMenu();
     }
+
+    public renderActionMenuOptions(options: actionMenuOptionInfo[]) {}
     /**
      * Get the elements in a document
      * @param documentId Document ID
@@ -1741,7 +2194,6 @@ export class App extends BaseApp {
      * @param index Configuration UI Index
      */
     public updateConfigurationUI(item: BTInsertableInfo, index: number) {
-        console.log(index);
         const configList = this.getConfigValues(index);
         const configuration = this.buildAssemblyConfiguration(configList, '');
 
@@ -1877,12 +2329,10 @@ export class App extends BaseApp {
         // this.currentNodes.items.forEach((nodeItem: BTGlobalTreeNodeInfo)=>{
         //   if(nodeItem.id == item.documentId)return documentNodeInfo = nodeItem;
         // })
-        console.log(documentNodeInfo);
         if (insertInfo.configList && insertInfo.configList.length > 0) {
             //Document has configurations
             const documentNodeInfoConfig: BTGlobalTreeNodeMagicDataInfo =
                 documentNodeInfo as BTGlobalTreeNodeMagicDataInfo;
-            console.log(insertInfo);
             let configInfo = {};
             insertInfo.configList.forEach((elem) => {
                 configInfo[elem.id] = elem.value;
@@ -1913,7 +2363,6 @@ export class App extends BaseApp {
         insertInfo: configInsertInfo,
         nodeInfo: BTGlobalTreeNodeInfo
     ): Promise<void> {
-        console.log(nodeInfo);
         // console.log(
         //     `Inserting item ${item.id} - ${item.elementName} into Part Studio ${documentId}/w/${workspaceId}/e/${elementId}`
         // );
@@ -2056,7 +2505,6 @@ export class App extends BaseApp {
             })
             .then(() => {
                 this.setInProgress(false);
-                console.log(nodeInfo);
                 this.processRecentlyInserted(nodeInfo, insertInfo);
             })
             .catch((reason) => {
@@ -2146,6 +2594,30 @@ export class App extends BaseApp {
             element.classList.remove('waiting');
         }
     }
+    public processLibrariesNode(index?: number, refreshNodes?: boolean) {
+        this.preferences
+            .getLibraryByIndex(index, refreshNodes === true) //only refresh if we are getting first node
+            .then((res: BTGlobalTreeNodeInfo[]) => {
+                if (res === undefined && res === undefined) {
+                    return;
+                }
+                const recentNode: BTGlobalTreeNodesInfo = {
+                    pathToRoot: [
+                        {
+                            jsonType: 'magic',
+                            resourceType: 'magic',
+                            id: 'LI',
+                            name: 'Libraries',
+                        },
+                    ],
+                    next: (index + 1).toString(),
+                    href: undefined,
+                    items: res,
+                };
+                this.setBreadcrumbs(recentNode.pathToRoot);
+                this.ProcessNodeResults(recentNode, undefined, true);
+            });
+    }
     /**
      * Process the results of the recently inserted node
      * @param index what index recently inserted node it should fetch and process
@@ -2213,6 +2685,8 @@ export class App extends BaseApp {
         } else if (magic === 'FV') {
             this.processFavoritedNode(0, true);
             return;
+        } else if (magic === 'LI') {
+            this.processLibrariesNode(0, true);
         }
         // uri: string) {
         // Get Onshape to return the list
@@ -2264,6 +2738,8 @@ export class App extends BaseApp {
                     this.processRecentlyInsertedNode(parseInt(info.next));
                 } else if (info.pathToRoot[0].id == 'FV') {
                     this.processFavoritedNode(parseInt(info.next));
+                } else if (info.pathToRoot[0].id == 'LI') {
+                    this.processLibrariesNode(parseInt(info.next));
                 }
                 break;
             }
@@ -2282,7 +2758,12 @@ export class App extends BaseApp {
     ) {
         const nodes = info as BTGlobalTreeNodesInfo;
         // When it does, append all the elements to the UI
-        this.appendElements(nodes.items, teamroot, subsetConfigurables);
+        this.appendElements(
+            nodes.items,
+            info.pathToRoot[0],
+            teamroot,
+            subsetConfigurables
+        );
         // Do we have any more in the list and are we under the limit for the UI
         if (
             info.next !== '' &&
@@ -2361,15 +2842,51 @@ export class App extends BaseApp {
                     console.log(`**** Call failed: ${err}`);
                 });
         } else if (item.jsonType === 'proxy-library') {
-            // this.preferences.getProxyLibrary(item).then((res) => {
-            //     this.setBreadcrumbs(res.pathToRoot, teamroot);
-            //     this.ProcessNodeResults(res, teamroot);
-            // });
+            console.log('Going to a proxy library');
+            this.libraries.getProxyLibrary(item.name).then((res) => {
+                const pathToRoot = [
+                    {
+                        jsonType: item.jsonType,
+                        resourceType: item.resourceType,
+                        id: item.name,
+                        name: item.name,
+                    },
+                ];
+                this.setBreadcrumbs(pathToRoot, teamroot);
+                this.ProcessNodeResults(
+                    {
+                        items: res.contents,
+                        pathToRoot,
+                    },
+                    teamroot
+                );
+            });
         } else if (item.jsonType === 'proxy-folder') {
-            // this.preferences.getProxyFolder(item).then((res) => {
-            //     this.setBreadcrumbs(res.pathToRoot, teamroot);
-            //     this.ProcessNodeResults(res, teamroot);
-            // });
+            console.log('Going to a proxy folder');
+            this.libraries.getProxyLibrary(this.currentBreadcrumbs[0].id).then((res) => {//using breadcrumbs is a cheap fix
+                if (res !== undefined) {
+                    const { library } = res;
+                    const pathToRoot = [
+                        {
+                            jsonType: item.jsonType,
+                            resourceType: item.resourceType,
+                            id: item.id,
+                            name: item.name,
+                        },
+                    ];
+                    //use breadcrumbs for library
+                    this.libraries.getProxyFolder(library, item.name).then((res) => {
+                        this.setBreadcrumbs(pathToRoot, teamroot);
+                        this.ProcessNodeResults(
+                            {
+                                items: res,
+                                pathToRoot,
+                            },
+                            teamroot
+                        );
+                    });
+                }
+            });
         } else if (item.jsonType === 'home') {
             this.processHome(dumpNodes);
         } else if (item.jsonType === 'magic' || item.resourceType === 'magic') {

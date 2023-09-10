@@ -275,65 +275,135 @@ export class Preferences {
      * @param item Item to add to the insert list
      */
     public addFavorited(
-      item: BTGlobalTreeNodeMagicDataInfo,
-      limit: number = 50,
-      name: string = 'favorited',
-      libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
-  ): Promise<boolean> {
-      return new Promise((resolve, _reject) => {
-          console.log(item);
-          this.getAllFavorited().then((favoriteList: BTGlobalTreeNodeInfo[]) => {
-              const newFavoriteList: BTGlobalTreeNodeInfo[] = [];
-              let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
-              let duplicate: BTGlobalTreeNodeMagicDataInfo;
-              //Iterate favoriteList and don't add duplicates to new list
-              favoriteList.unshift(item);
-              for (let i in favoriteList) {
-                  favoriteItem = favoriteList[i];
-                  duplicate = newFavoriteList.find(
-                      (element: BTGlobalTreeNodeMagicDataInfo) => {
-                          return (
-                              element.id === favoriteItem.id &&
-                              element.configuration === favoriteItem.configuration
-                          );
-                      }
-                  );
-                  if (duplicate === undefined) newFavoriteList.push(favoriteItem);
-              }
-              if (favoriteList.length >= limit) newFavoriteList.pop();//is this necessary?
-              this.setBTGArray(name, newFavoriteList, libInfo);
-          });
-          resolve(false);
-      });
-  }
+        item: BTGlobalTreeNodeMagicDataInfo,
+        limit: number = 50,
+        name: string = 'favorited',
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<boolean> {
+        return new Promise((resolve, _reject) => {
+            console.log(item);
+            this.getAllFavorited().then((favoriteList: BTGlobalTreeNodeInfo[]) => {
+                const newFavoriteList: BTGlobalTreeNodeInfo[] = [];
+                let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
+                let duplicate: BTGlobalTreeNodeMagicDataInfo;
+                //Iterate favoriteList and don't add duplicates to new list
+                favoriteList.unshift(item);
+                for (let i in favoriteList) {
+                    favoriteItem = favoriteList[i];
+                    duplicate = newFavoriteList.find(
+                        (element: BTGlobalTreeNodeMagicDataInfo) => {
+                            return (
+                                element.id === favoriteItem.id &&
+                                element.configuration === favoriteItem.configuration
+                            );
+                        }
+                    );
+                    if (duplicate === undefined) newFavoriteList.push(favoriteItem);
+                }
+                if (favoriteList.length >= limit) newFavoriteList.pop(); //is this necessary?
+                this.setBTGArray(name, newFavoriteList, libInfo);
+            });
+            resolve(false);
+        });
+    }
 
-  /**
+    /**
+     * Add an item to the list of favorited items associated with the application.  Note that it only stores the last 50 sorted by date
+     * @param item Item to add to the insert list
+     */
+    public addLibrary(
+        item: BTGlobalTreeNodeMagicDataInfo,
+        limit: number = 50,
+        name: string = 'libraries',
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<boolean> {
+        return new Promise((resolve, _reject) => {
+            console.log(item);
+            this.getAllLibraries().then((libraryList: BTGlobalTreeNodeInfo[]) => {
+                const newLibraryList: BTGlobalTreeNodeInfo[] = [];
+                let libraryItem: BTGlobalTreeNodeMagicDataInfo;
+                let duplicate: BTGlobalTreeNodeMagicDataInfo;
+                //Iterate favoriteList and don't add duplicates to new list
+                libraryList.unshift(item);
+                for (let i in libraryList) {
+                    libraryItem = libraryList[i];
+                    duplicate = newLibraryList.find(
+                        (element: BTGlobalTreeNodeMagicDataInfo) => {
+                            return (
+                                element.id === libraryItem.id &&
+                                element.configuration === libraryItem.configuration
+                            );
+                        }
+                    );
+                    if (duplicate === undefined) newLibraryList.push(libraryItem);
+                }
+                if (libraryList.length >= limit) newLibraryList.pop(); //is this necessary?
+                this.setBTGArray(name, newLibraryList, libInfo);
+            });
+            resolve(false);
+        });
+    }
+
+    /**
      * Remove an item to the list of favorited items associated with the application.  Note that it only stores the last 50 sorted by date
      * @param item Item to add to the insert list
      */
-  public removeFavorited(
-    item: BTGlobalTreeNodeMagicDataInfo,
-    limit: number = 50,
-    name: string = 'favorited',
-    libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
-): Promise<boolean> {
-    return new Promise((resolve, _reject) => {
-        console.log(item);
-        this.getAllFavorited().then((favoriteList: BTGlobalTreeNodeInfo[]) => {
-            const newFavoriteList: BTGlobalTreeNodeInfo[] = [];
-            let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
-            //iterate over favorites list and add all the items that aren't like item
-            for (let i in favoriteList) {
-                favoriteItem = favoriteList[i];
-                if(favoriteItem.id !== item.id || favoriteItem.configuration !== item.configuration){
-                  newFavoriteList.push(favoriteItem)
-                };
-            }
-            this.setBTGArray(name, newFavoriteList, libInfo);
+    public removeFavorited(
+        item: BTGlobalTreeNodeMagicDataInfo,
+        limit: number = 50,
+        name: string = 'favorited',
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<boolean> {
+        return new Promise((resolve, _reject) => {
+            console.log(item);
+            this.getAllFavorited().then((favoriteList: BTGlobalTreeNodeInfo[]) => {
+                const newFavoriteList: BTGlobalTreeNodeInfo[] = [];
+                let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
+                //iterate over favorites list and add all the items that aren't like item
+                for (let i in favoriteList) {
+                    favoriteItem = favoriteList[i];
+                    if (
+                        favoriteItem.id !== item.id ||
+                        favoriteItem.configuration !== item.configuration
+                    ) {
+                        newFavoriteList.push(favoriteItem);
+                    }
+                }
+                this.setBTGArray(name, newFavoriteList, libInfo);
+            });
+            resolve(false);
         });
-        resolve(false);
-    });
-}
+    }
+    /**
+     * Remove an item to the list of favorited items associated with the application.  Note that it only stores the last 50 sorted by date
+     * @param item Item to add to the insert list
+     */
+    public removeLibrary(
+        item: BTGlobalTreeNodeMagicDataInfo,
+        limit: number = 50,
+        name: string = 'libraries',
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<boolean> {
+        return new Promise((resolve, _reject) => {
+            console.log(item);
+            this.getAllLibraries().then((libraryList: BTGlobalTreeNodeInfo[]) => {
+                const newLibraryList: BTGlobalTreeNodeInfo[] = [];
+                let libraryItem: BTGlobalTreeNodeMagicDataInfo;
+                //iterate over favorites list and add all the items that aren't like item
+                for (let i in libraryList) {
+                    libraryItem = libraryList[i];
+                    if (
+                        libraryItem.id !== item.id ||
+                        libraryItem.configuration !== item.configuration
+                    ) {
+                        newLibraryList.push(libraryItem);
+                    }
+                }
+                this.setBTGArray(name, newLibraryList, libInfo);
+            });
+            resolve(false);
+        });
+    }
     /**
      * Add an item to the list of recently inserted items associated with the application.  Note that it only stores the last 50 sorted by date
      * @param item Item to add to the insert list
@@ -370,6 +440,12 @@ export class Preferences {
             resolve(false);
         });
     }
+    public getAllLibraries(
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<Array<BTGlobalTreeNodeInfo>> {
+        return this.getBTGArray('libraries', libInfo);
+    }
+
     public getAllFavorited(
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<Array<BTGlobalTreeNodeInfo>> {
@@ -435,12 +511,36 @@ export class Preferences {
         });
     }
 
+    libraryNodes: BTGlobalTreeNodeInfo[];
+
+    public getLibraryByIndex(
+        index: number,
+        refreshNodeResults?: boolean,
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<Array<BTGlobalTreeNodeInfo>> {
+        return new Promise(async (resolve, reject) => {
+            if (refreshNodeResults === true) {
+                const result = await this.getAllLibraries(libInfo);
+                if (result === undefined || result.length === 0) {
+                    this.libraryNodes = [];
+                    resolve(undefined);
+                }
+                this.libraryNodes = result;
+            }
+            const currentNodes = this.libraryNodes;
+            if (index >= currentNodes.length) {
+                resolve(undefined);
+            }
+            resolve([currentNodes[index]]);
+        });
+    }
+
     /**
-     * @param location Location to save - Array of BTGlobalTreeNodeInfo representing the full path to the location
+     * @param array Array to save - Array of BTGlobalTreeNodeInfo representing the full path to the location
      */
     public setBTGArray(
         pref_name: string,
-        location: Array<BTGlobalTreeNodeInfo>,
+        array: Array<BTGlobalTreeNodeInfo>,
         libInfo: BTGlobalTreeProxyInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
@@ -451,7 +551,7 @@ export class Preferences {
                             .updateAppElement({
                                 bTAppElementUpdateParams: {
                                     jsonPatch: `[{ "op": "replace", "path": "/${pref_name}", "value": ${JSON.stringify(
-                                        location
+                                        array
                                     )} }]`,
                                 },
                                 did: libInfo.id,
@@ -467,9 +567,9 @@ export class Preferences {
                             });
                     } else {
                         // The entry did not exist, so create the entry then call this method again.
-                        this.createCustom(pref_name)
+                        this.createCustom(pref_name, libInfo)
                             .then((res) => {
-                                this.setBTGArray(pref_name, location, libInfo)
+                                this.setBTGArray(pref_name, array, libInfo)
                                     .then((res2) => resolve(res2))
                                     .catch((err) => {
                                         resolve(false);
@@ -502,7 +602,9 @@ export class Preferences {
                     let result: Array<BTGlobalTreeNodeInfo> = [];
                     console.log(res.tree);
                     for (let btg_json of res.tree[pref_name]) {
-                        result.push(BTGlobalTreeNodeMagicDataInfoJSONTyped(btg_json, false));
+                        result.push(
+                            BTGlobalTreeNodeMagicDataInfoJSONTyped(btg_json, false)
+                        );
                     }
                     console.log(result);
                     resolve(result);
@@ -686,120 +788,120 @@ export class Preferences {
         });
     }
 
-    /*********************************************************************************
-     *                         PROXY LIBRARY/FOLDER ROUTINES                         *
-     *********************************************************************************/
-    /**
-     * Creates a proxy Library object as a real Onshape document in a given location.
-     * Note that the parent must be a real Onshape folder location
-     * @param parent Location in Onshape hierarchy to create the new folder object
-     * @param name Name to associate with the library
-     */
-    public createProxyLibrary(
-        parent: BTGlobalTreeNodeInfo,
-        name: string
-    ): Promise<BTGlobalTreeNodeInfo> {
-        return new Promise((resolve, _reject) => {
-            const result: BTGlobalTreeNodeInfo = {
-                jsonType: 'proxy-library',
-                name: name,
-            };
-            resolve(undefined);
-        });
-    }
-    /**
-     * Creates a proxy folder object inside a proxy library
-     * Note that the parent must be a proxy-library type.  Entries return
-     * @param parent Proxy Library object to contain the folder
-     * @param name Name to associate with the folder
-     * @returns BTGlobalTreeNodeInfo associated with the newly created entry
-     */
-    public createProxyFolder(
-        parent: BTGlobalTreeNodeInfo,
-        name: string
-    ): Promise<BTGlobalTreeNodeInfo> {
-        return new Promise((resolve, _reject) => {
-            const result: BTGlobalTreeNodeInfo = {
-                jsonType: 'proxy-foler',
-                name: name,
-            };
-            resolve(undefined);
-        });
-    }
-    // TODO: Do we need a setProxyMetaData/getProxyMetaData routine to store extra
-    //       information with the proxy library objects (such as owner, contact info, website...)
-    /**
-     * Sets the metadata for a proxy item
-     * @param entry Proxy item (proxy-folder or proxy-library) to set metadata for
-     * @param metadata Arbitrary metadata to set
-     */
-    public setProxyMetadata(
-        entry: BTGlobalTreeNodeInfo,
-        metadata: any
-    ): Promise<boolean> {
-        return new Promise((resolve, _reject) => {
-            resolve(false);
-        });
-    }
-    /**
-     * Retrieves the metadata for a proxy item
-     * @param entry Proxy item (proxy-folder or proxy-library) to set metadata for
-     * @returns Arbitrary metadata set with setProxyMetadata
-     */
-    getProxyMetadata(entry: BTGlobalTreeNodeInfo): Promise<any> {
-        return new Promise((resolve, _reject) => {
-            resolve(undefined);
-        });
-    }
-    /**
-     * Set the content for a proxy library object
-     * @param library Previously created proxy library object (created with createProxyLibrary)
-     * @param entries Sorted array of BTGlobalTreeNodeInfo objects representing the contents of the library
-     */
-    public setProxyLibrary(
-        library: BTGlobalTreeNodeInfo,
-        entries: Array<BTGlobalTreeNodeInfo>
-    ): Promise<boolean> {
-        return new Promise((resolve, _reject) => {
-            resolve(false);
-        });
-    }
-    /**
-     * Gets the contents of a proxy library object
-     * @param library Previously created proxy library object (created with createProxyLibrary)
-     * @returns Sorted Array of BTGlobalTreeNodeInfo objects stored in the proxy library
-     */
-    public getProxyLibrary(
-        library: BTGlobalTreeNodeInfo
-    ): Promise<Array<BTGlobalTreeNodeInfo>> {
-        return new Promise((resolve, _reject) => {
-            resolve([]);
-        });
-    }
-    /**
-     * Set the content for a proxy folder object
-     * @param folder Previously created proxy folder object (created with createProxyFolder)
-     * @param entries Sorted Array of BTGlobalTreeNodeInfo objects to store in the proxy folder
-     * @returns Success/Failure
-     */
-    public setProxyFolder(
-        folder: BTGlobalTreeNodeInfo,
-        entries: Array<BTGlobalTreeNodeInfo>
-    ): Promise<boolean> {
-        return new Promise((resolve, _reject) => {
-            resolve(false);
-        });
-    }
-    /**
-     * Get the content for a proxy folder object
-     * @param folder Previously created proxy folder object (created with createProxyFolder)
-     * @returns Sorted Array of BTGlobalTreeNodeInfo objects stored in the proxy folder
-     */
-    public getProxyFolder(
-        folder: BTGlobalTreeNodeInfo
-    ): Promise<Array<BTGlobalTreeNodeInfo>> {
-        return new Promise((resolve, _reject) => {
-            resolve([]);
-        });
-    }
+    // /*********************************************************************************
+    //  *                         PROXY LIBRARY/FOLDER ROUTINES                         *
+    //  *********************************************************************************/
+    // /**
+    //  * Creates a proxy Library object as a real Onshape document in a given location.
+    //  * Note that the parent must be a real Onshape folder location
+    //  * @param parent Location in Onshape hierarchy to create the new folder object
+    //  * @param name Name to associate with the library
+    //  */
+    // public createProxyLibrary(
+    //     parent: BTGlobalTreeNodeInfo,
+    //     name: string
+    // ): Promise<BTGlobalTreeNodeInfo> {
+    //     return new Promise((resolve, _reject) => {
+    //         const result: BTGlobalTreeNodeInfo = {
+    //             jsonType: 'proxy-library',
+    //             name: name,
+    //         };
+    //         resolve(undefined);
+    //     });
+    // }
+    // /**
+    //  * Creates a proxy folder object inside a proxy library
+    //  * Note that the parent must be a proxy-library type.  Entries return
+    //  * @param parent Proxy Library object to contain the folder
+    //  * @param name Name to associate with the folder
+    //  * @returns BTGlobalTreeNodeInfo associated with the newly created entry
+    //  */
+    // public createProxyFolder(
+    //     parent: BTGlobalTreeNodeInfo,
+    //     name: string
+    // ): Promise<BTGlobalTreeNodeInfo> {
+    //     return new Promise((resolve, _reject) => {
+    //         const result: BTGlobalTreeNodeInfo = {
+    //             jsonType: 'proxy-foler',
+    //             name: name,
+    //         };
+    //         resolve(undefined);
+    //     });
+    // }
+    // // TODO: Do we need a setProxyMetaData/getProxyMetaData routine to store extra
+    // //       information with the proxy library objects (such as owner, contact info, website...)
+    // /**
+    //  * Sets the metadata for a proxy item
+    //  * @param entry Proxy item (proxy-folder or proxy-library) to set metadata for
+    //  * @param metadata Arbitrary metadata to set
+    //  */
+    // public setProxyMetadata(
+    //     entry: BTGlobalTreeNodeInfo,
+    //     metadata: any
+    // ): Promise<boolean> {
+    //     return new Promise((resolve, _reject) => {
+    //         resolve(false);
+    //     });
+    // }
+    // /**
+    //  * Retrieves the metadata for a proxy item
+    //  * @param entry Proxy item (proxy-folder or proxy-library) to set metadata for
+    //  * @returns Arbitrary metadata set with setProxyMetadata
+    //  */
+    // getProxyMetadata(entry: BTGlobalTreeNodeInfo): Promise<any> {
+    //     return new Promise((resolve, _reject) => {
+    //         resolve(undefined);
+    //     });
+    // }
+    // /**
+    //  * Set the content for a proxy library object
+    //  * @param library Previously created proxy library object (created with createProxyLibrary)
+    //  * @param entries Sorted array of BTGlobalTreeNodeInfo objects representing the contents of the library
+    //  */
+    // public setProxyLibrary(
+    //     library: BTGlobalTreeNodeInfo,
+    //     entries: Array<BTGlobalTreeNodeInfo>
+    // ): Promise<boolean> {
+    //     return new Promise((resolve, _reject) => {
+    //         resolve(false);
+    //     });
+    // }
+    // /**
+    //  * Gets the contents of a proxy library object
+    //  * @param library Previously created proxy library object (created with createProxyLibrary)
+    //  * @returns Sorted Array of BTGlobalTreeNodeInfo objects stored in the proxy library
+    //  */
+    // public getProxyLibrary(
+    //     library: BTGlobalTreeNodeInfo
+    // ): Promise<Array<BTGlobalTreeNodeInfo>> {
+    //     return new Promise((resolve, _reject) => {
+    //         resolve([]);
+    //     });
+    // }
+    // /**
+    //  * Set the content for a proxy folder object
+    //  * @param folder Previously created proxy folder object (created with createProxyFolder)
+    //  * @param entries Sorted Array of BTGlobalTreeNodeInfo objects to store in the proxy folder
+    //  * @returns Success/Failure
+    //  */
+    // public setProxyFolder(
+    //     folder: BTGlobalTreeNodeInfo,
+    //     entries: Array<BTGlobalTreeNodeInfo>
+    // ): Promise<boolean> {
+    //     return new Promise((resolve, _reject) => {
+    //         resolve(false);
+    //     });
+    // }
+    // /**
+    //  * Get the content for a proxy folder object
+    //  * @param folder Previously created proxy folder object (created with createProxyFolder)
+    //  * @returns Sorted Array of BTGlobalTreeNodeInfo objects stored in the proxy folder
+    //  */
+    // public getProxyFolder(
+    //     folder: BTGlobalTreeNodeInfo
+    // ): Promise<Array<BTGlobalTreeNodeInfo>> {
+    //     return new Promise((resolve, _reject) => {
+    //         resolve([]);
+    //     });
+    // }
 }
