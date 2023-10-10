@@ -39,6 +39,7 @@ import {
     BTInsertablesListResponseFromJSON,
     BTMEnumOption592,
     BTMIndividualQuery138,
+    BTMMateRelation1412FromJSON,
     BTMParameter1,
     BTMParameterBoolean144,
     BTMParameterDerived864,
@@ -52,6 +53,9 @@ import {
     GBTElementType,
     GetInsertablesRequest,
     GetWMVEPsMetadataWvmEnum,
+    ObjectId,
+    instanceOfBTPFunctionOrPredicateDeclaration247,
+    instanceOfGlobalPermissionInfo,
 } from 'onshape-typescript-fetch';
 import { createSVGIcon, OnshapeSVGIcon } from './onshape/svgicon';
 import { JTTable } from './common/jttable';
@@ -64,6 +68,7 @@ import {
     Preferences,
 } from './preferences';
 import { Library } from './libraries';
+import { appName as APP_NAME } from './app_settings.json';
 export interface magicIconInfo {
     label: string;
     icon: OnshapeSVGIcon;
@@ -91,17 +96,20 @@ export interface metaData {
 }
 
 export interface folderLocation {
-    folder: BTGlobalTreeNodeInfo;
+    pathToRoot: BTGlobalTreeNodeInfo[];
     teamroot: BTGlobalTreeNodeInfo;
 }
 
 export interface actionMenuOptionInfo {
     parentType: string[];
     documentType?: string[];
+    excludeParentType?: string[];
     name: string;
     label?: string;
     element?: Element;
     input?: actionMenuOptionInputInfo[];
+    deleteIcon?: boolean;
+    parentWithoutDocument?: string[];
 }
 
 export interface actionMenuOptionInputInfo {
@@ -111,12 +119,12 @@ export interface actionMenuOptionInputInfo {
 }
 
 export class App extends BaseApp {
-    public myserver = 'https://ftconshape.com/insertwork';
+    public myserver = 'https://ftconshape.com/' + APP_NAME;
     public magic = 1;
     public loaded = 0;
     public loadedlimit = 2500; // Maximum number of items we will load
     public targetDocumentElementInfo: BTDocumentElementInfo = {};
-    public appName: string = 'insert_work';
+    public appName: string = APP_NAME;
 
     public insertToTarget: (
         documentId: string,
@@ -167,14 +175,23 @@ export class App extends BaseApp {
         NAME: {
             parentType: ['any'],
             name: 'name',
-            documentType: ['document-summary', 'document-config', 'magic'],
+            documentType: [
+                'document-summary',
+                'document-config',
+                'folder',
+                'magic',
+                'proxy-library',
+                'proxy-folder',
+            ],
+            parentWithoutDocument: ['proxy-folder', 'proxy-library', 'LI'],
             label: 'Name',
         },
         REHOME: {
             parentType: ['home'],
             documentType: ['magic'],
             name: 'removehome',
-            label: 'Remove from home',
+            label: 'Remove from home (not implemented)',
+            deleteIcon: true,
         },
         REPORT: {
             parentType: ['any'],
@@ -188,17 +205,24 @@ export class App extends BaseApp {
             name: 'favorite',
             label: 'Loading favorite status...',
         },
+        CLONELIB: {
+            parentType: ['any'], //exclude: LI / My Libraries
+            // excludeParentType: ['LI'], //library in my libraries shouldn't be cloneable
+            documentType: ['proxy-library'],
+            name: 'clonepartslibrary',
+            label: 'Clone this parts library into My Libraries',
+        },
         ADDLIB: {
             parentType: ['any'],
-            documentType: ['any', 'proxy-library'],
+            documentType: ['proxy-library'],
             name: 'addproxylibrary',
-            label: 'Add proxy library',
+            label: 'Loading My Libraries status...',
         },
         CREATELIB: {
-            parentType: ['home'],
+            parentType: ['home', 'LI'],
             documentType: ['LI'],
             name: 'createproxylibrary',
-            label: 'Create proxy library',
+            label: 'Create parts library',
             input: [
                 {
                     name: 'lib-name',
@@ -206,17 +230,18 @@ export class App extends BaseApp {
                     type: 'text',
                 },
             ],
+            parentWithoutDocument: ['LI'],
         },
         ADDLIBDOC: {
             parentType: ['any'],
             documentType: ['document-summary'],
             name: 'adddocumenttolibrary',
-            label: 'Add document to library',
+            label: 'Add document to parts library',
             input: [
                 {
                     name: 'lib-name',
                     label: 'Library Name',
-                    type: 'text',
+                    type: 'select',
                 },
             ],
         },
@@ -224,25 +249,39 @@ export class App extends BaseApp {
             parentType: ['any'],
             documentType: ['document-summary'],
             name: 'adddocumenttoproxy',
-            label: 'Add document to proxy',
+            label: 'Add document to library folder',
             input: [
                 {
                     name: 'lib-name',
                     label: 'Library Name',
-                    type: 'text',
+                    type: 'select',
                 },
                 {
                     name: 'proxy-name',
                     label: 'Proxy Name',
-                    type: 'text',
+                    type: 'select',
                 },
             ],
         },
+        REPROXYDOC: {
+            parentType: ['proxy-folder'],
+            documentType: ['document-summary'],
+            name: 'removedocumentfromproxy',
+            label: 'Remove document from library folder',
+            deleteIcon: true,
+        },
+        RELIBDOC: {
+            parentType: ['proxy-library'],
+            documentType: ['document-summary'],
+            name: 'removedocumentfromlibrary',
+            label: 'Remove document from library',
+            deleteIcon: true,
+        },
         CREATEPROXY: {
             parentType: ['any'],
-            documentType: ['proxy-library'],
+            documentType: ['proxy-library', 'proxy-folder'],
             name: 'createproxyfolder',
-            label: 'Create proxy folder for library',
+            label: 'Create folder for library',
             input: [
                 {
                     name: 'proxy-name',
@@ -250,6 +289,20 @@ export class App extends BaseApp {
                     type: 'text',
                 },
             ],
+            parentWithoutDocument: ['proxy-library', 'proxy-folder'],
+        },
+        DELPROXY: {
+            parentType: ['proxy-library', 'proxy-folder'],
+            documentType: ['proxy-folder'],
+            name: 'deleteproxyfolder',
+            label: 'Remove folder',
+            deleteIcon: true,
+        },
+        CLONEFOLDER: {
+            parentType: ['any'],
+            documentType: ['folder'],
+            name: 'createlibraryfromfolder',
+            label: 'Create a parts library from folder',
         },
     };
     public preferences: Preferences;
@@ -258,7 +311,7 @@ export class App extends BaseApp {
      * The main entry point for an app
      */
     public startApp(): void {
-        this.libraries = new Library(this.onshape, this.appName);
+        this.libraries = new Library(this.onshape);
         this.preferences = new Preferences(this.onshape);
         this.preferences
             .initUserPreferences(this.appName)
@@ -305,7 +358,8 @@ export class App extends BaseApp {
                         }
 
                         this.getLastLocation().then((lastLocation) => {
-                            this.gotoFolder(lastLocation[0], lastLocation[1]);
+                            this.setBreadcrumbs(lastLocation);
+                            this.gotoFolder(lastLocation[0]);
                         });
                     })
                     .catch((err) => {
@@ -334,7 +388,8 @@ export class App extends BaseApp {
      * @param location Location to
      */
     public saveLastLocation(location: folderLocation): void {
-        this.preferences.setLastKnownLocation([location.folder, location.teamroot]);
+        console.log(location, '______');
+        this.preferences.setLastKnownLocation(location.pathToRoot);
     }
     /**
      * Restore the last saved location
@@ -345,18 +400,47 @@ export class App extends BaseApp {
             this.preferences
                 .getLastKnownLocation()
                 .then((locations) => {
-                    if (locations === null || locations === undefined) {
-                        resolve([{ jsonType: 'home' }, undefined]);
+                    if (
+                        locations === null ||
+                        locations === undefined ||
+                        locations[0] === undefined
+                    ) {
+                        resolve([{ jsonType: 'home' }]);
                     } else {
                         resolve(locations);
                     }
                 })
                 .catch((err) => {
-                    resolve([{ jsonType: 'home' }, undefined]);
+                    resolve([{ jsonType: 'home' }]);
                 });
         });
     }
     currentBreadcrumbs: BTGlobalTreeNodeInfo[];
+    /**
+     * Set the breadcrumbs in the header
+     * @param node Node to add to breadcrumbs, if the node is already in the breadcrumbs, it will delete the more recent crumbs until that node
+     */
+    public addBreadcrumbNode(node: BTGlobalTreeMagicNodeInfo): void {
+        let itemInBreadcrumbsIndex: number;
+        const itemInBreadcrumbs = this.currentBreadcrumbs.find((crumb, index) => {
+            itemInBreadcrumbsIndex = index;
+            return (
+                crumb.jsonType === node.jsonType &&
+                crumb.id === node.id &&
+                crumb.projectId === node.projectId // &&
+                // crumb.treeHref === item.treeHref // prevents recursion
+            );
+        });
+        if (itemInBreadcrumbs !== undefined) {
+            console.log(this.currentBreadcrumbs, itemInBreadcrumbsIndex);
+            this.currentBreadcrumbs = this.currentBreadcrumbs.slice(
+                itemInBreadcrumbsIndex + 1
+            );
+            console.log(this.currentBreadcrumbs);
+        }
+        this.currentBreadcrumbs.unshift(node);
+        this.setBreadcrumbs(this.currentBreadcrumbs);
+    }
     /**
      * Set the breadcrumbs in the header
      * @param breadcrumbs Array of breadcrumbs (in reverse order)
@@ -366,13 +450,18 @@ export class App extends BaseApp {
         breadcrumbs: BTGlobalTreeNodeInfo[],
         teamroot?: BTGlobalTreeNodeInfo
     ): void {
+        console.log(breadcrumbs);
+        this.saveLastLocation({
+            pathToRoot: breadcrumbs,
+            teamroot: teamroot,
+        });
         // Find where they want us to put the breadcrumbs
         const breadcrumbscontainer = document.getElementById('breadcrumbs');
         if (breadcrumbscontainer === undefined || breadcrumbscontainer === null) {
             // If we don't have a place for it, just skip out
             return;
         }
-        this.currentBreadcrumbs = breadcrumbs
+        this.currentBreadcrumbs = breadcrumbs;
         // This is what Onshape Generates
         //
         // <span ng-if="!documentSearch.searchText" class="documents-filter-heading spaced-filter-name">
@@ -542,6 +631,8 @@ export class App extends BaseApp {
                 if (useteamicon || node.resourceType === 'team') {
                     icon = 'svg-icon-team';
                     useteamicon = false;
+                } else if (node.jsonType === 'proxy-library') {
+                    icon = 'svg-icon-library';
                 }
                 breadcrumbdiv = this.createBreadcrumbNode(icon, node.name, isLast, () => {
                     this.gotoFolder(node, teamroot);
@@ -666,6 +757,18 @@ export class App extends BaseApp {
         // Figure out where we are to add the entries
         let container = this.getFileListContainer();
         // Iterate over all the items
+        const containerBackground = this.getFileBackground();
+        containerBackground.oncontextmenu = (event) => {
+            event.preventDefault();
+            let rect = new DOMRect(
+                event.clientX,
+                event.clientY,
+                containerBackground.clientWidth / 2,
+                0
+            );
+            this.showActionMenu(undefined, parentNode, rect);
+            this.hidePopup();
+        };
         items.map((item) => {
             const itemInfo = item as BTDocumentSummaryInfo;
             // Have we hit the limit?  If so then just skip out
@@ -680,7 +783,7 @@ export class App extends BaseApp {
             // <td class="os-documents-thumbnail-column os-document-folder-thumbnail-column document-item"><svg class="os-svg-icon folder-list-icon"><use href="#svg-icon-folder"></use></svg></td>
             // <td class="os-document-name document-item">Visor - John Toebes</td></tr></tbody></table>
             ////
-            const libraryName = this.libraries.getLibraryName(item.name);
+            const libraryName = this.libraries.decodeLibraryName(item.name);
             if (libraryName !== undefined) {
                 item.jsonType = 'proxy-library'; //just make sure
                 item.isContainer = true; //also to make sure
@@ -797,6 +900,26 @@ export class App extends BaseApp {
         });
     }
     /**
+     * Finds the documents background the context menu to be linked to.
+     * If one doesn't already exist it will add it in the proper place.
+     * @returns Element behind the row entires
+     */
+    public getFileBackground(): HTMLElement {
+        let container = document.getElementById('background');
+        if (container === null) {
+            container = createDocumentElement('div', {
+                style: 'position:absolute;left:0px;top:0px;width:100%;height:100%;',
+                id: 'background',
+            });
+            const dump = document.getElementById('dump');
+            dump.append(container);
+        }
+        const breadcrumbdiv = document.getElementById('breadcrumbs');
+        const breadcrumbHeight = (breadcrumbdiv && breadcrumbdiv.clientHeight) || 25;
+        container.style.top = breadcrumbHeight + 'px';
+        return container;
+    }
+    /**
      * Finds the documents container to append entries to.  If one doesn't
      * already exist it will add it in the proper place.
      * @returns Table to append entries to
@@ -805,6 +928,7 @@ export class App extends BaseApp {
         let container = document.getElementById('glist');
         if (container === null) {
             container = createDocumentElement('div', {
+                style: 'position:relative;width:90%;z-index:1', // allow for blank context menu on right
                 class: 'os-documents-list full-width document-version-picker-section document-version-picker-document-list select-item-dialog-subdialog-content',
                 id: 'glist',
             });
@@ -939,15 +1063,23 @@ export class App extends BaseApp {
     ): void {
         const actionMenu = document.getElementById('docactionmenu');
         if (actionMenu !== null) {
-            const itemInfo = item as BTDocumentSummaryInfo;
             // TODO: Same as popup, Move actionMenu above item if it doesn't fit below
+            const actionMenuWidth = Math.max(200, rect.width);
             actionMenu.style.left = String(rect.left) + 'px';
             actionMenu.style.top = String(rect.bottom) + 'px';
-            actionMenu.style.width = String(Math.max(200, rect.width)) + 'px';
+            actionMenu.style.width = String(actionMenuWidth) + 'px';
             actionMenu.style.maxWidth = String(Math.max(200, rect.width)) + 'px';
+            
+            const actionMenuDiv = actionMenu.firstChild as HTMLDivElement;
 
-            const actionMenuDiv = actionMenu.firstChild;
-
+            //Move actionMenu into view
+            actionMenu.style.display = 'block';
+            const actionMenuRect = actionMenuDiv.getBoundingClientRect();
+            if(actionMenuRect.left < 0)actionMenu.style.left = "0px";
+            if(actionMenuRect.right > document.body.clientWidth)actionMenu.style.left = String(document.body.clientWidth-actionMenuDiv.clientWidth-2) + "px";
+            if(actionMenuRect.top < 0)actionMenu.style.top = "0px";
+            if(actionMenuRect.bottom > document.body.clientHeight)actionMenu.style.top = String(document.body.clientHeight-actionMenuRect.height-2) + "px";
+            actionMenu.style.display = 'none';
             //Prune seperators
             actionMenuDiv.childNodes.forEach((elem) => {
                 if (
@@ -958,13 +1090,13 @@ export class App extends BaseApp {
                 }
             });
 
-            console.log(item);
+            const backgroundMenu = item === undefined || item === null;
+
             for (const id in this.actionMenuOptions) {
-                const option = this.actionMenuOptions[id];
+                const option = this.actionMenuOptions[id] as actionMenuOptionInfo;
                 const optionId = 'docactionmenu_' + option.name;
                 const optionElement = document.getElementById(optionId);
                 optionElement.parentElement.style.display = 'inherit';
-                console.log(option, item, parentNode);
 
                 let inputDiv: HTMLElement;
                 let submitElement: HTMLButtonElement;
@@ -976,35 +1108,94 @@ export class App extends BaseApp {
                     ) as HTMLButtonElement;
                 }
 
-                //Make sure that items's type is allowed for this option
-                if (option.documentType && option.documentType[0] !== 'any') {
-                    let correctPlacement = false;
-                    option.documentType.forEach((allowedType) => {
-                        if (allowedType === item.jsonType || allowedType === item.id)
-                            correctPlacement = true;
-                    });
-                    if (!correctPlacement) {
+                if (backgroundMenu) {
+                    item = parentNode;
+                    if (option.parentWithoutDocument === undefined) {
                         optionElement.parentElement.style.display = 'none';
                         continue;
+                    } else if (option.parentWithoutDocument[0] !== 'any') {
+                        console.log(option.parentWithoutDocument, parentNode);
+                        //make sure the parent type is allowed
+                        let correctPlacement = false;
+                        option.parentWithoutDocument.forEach((allowedType) => {
+                            if (
+                                allowedType === parentNode.jsonType ||
+                                allowedType === parentNode.id
+                            )
+                                correctPlacement = true;
+                        });
+                        if (!correctPlacement) {
+                            optionElement.parentElement.style.display = 'none';
+                            continue;
+                        }
+                    }
+                } else {
+                    //item doesn't exist so we don't need to do these checks
+
+                    //Make sure that items's type is allowed for this option
+                    if (option.documentType && option.documentType[0] !== 'any') {
+                        let correctPlacement = false;
+                        option.documentType.forEach((allowedType) => {
+                            if (allowedType === item.jsonType || allowedType === item.id)
+                                correctPlacement = true;
+                        });
+                        if (!correctPlacement) {
+                            optionElement.parentElement.style.display = 'none';
+                            continue;
+                        }
+                    }
+
+                    //exclude item's type if property is there
+                    if (option.excludeParentType) {
+                        let correctPlacement = true;
+                        option.excludeParentType.forEach((excludeType) => {
+                            if (excludeType === item.jsonType || excludeType === item.id)
+                                correctPlacement = false;
+                        });
+                        if (!correctPlacement) {
+                            optionElement.parentElement.style.display = 'none';
+                            continue;
+                        }
+                    }
+
+                    //Make sure that parentNode's type is allowed for this option
+                    //Magic types can be vague and have their ids a better representation of what document
+                    if (option.parentType && option.parentType[0] !== 'any') {
+                        let correctPlacement = false;
+                        option.parentType.forEach((allowedType) => {
+                            if (
+                                allowedType === parentNode.jsonType ||
+                                allowedType === parentNode.id
+                            )
+                                correctPlacement = true;
+                        });
+                        if (!correctPlacement) {
+                            optionElement.parentElement.style.display = 'none';
+                            continue;
+                        }
                     }
                 }
 
-                //Make sure that parentNode's type is allowed for this option
-                //Magic types can be vague and have their ids a better representation of what document
-                if (option.parentType && option.parentType[0] !== 'any') {
-                    let correctPlacement = false;
-                    option.parentType.forEach((allowedType) => {
-                        if (
-                            allowedType === parentNode.jsonType ||
-                            allowedType === parentNode.id
-                        )
-                            correctPlacement = true;
+                const updateActionMenuInputOptions = (
+                    id: string,
+                    list: Array<{ id: string; label: string }>
+                ) => {
+                    const inputSelectElement = document.getElementById(id);
+                    if (inputSelectElement === undefined || inputSelectElement === null)
+                        return;
+                    inputSelectElement.innerHTML = '';
+                    inputSelectElement.appendChild(
+                        createDocumentElement('option', { innerHTML: 'Select One' })
+                    );
+                    list.forEach((input) => {
+                        const inputElementOption = createDocumentElement('option', {
+                            value: input.id,
+                            innerHTML: input.label,
+                        });
+                        inputElementOption.innerHTML = input.label;
+                        inputSelectElement.appendChild(inputElementOption);
                     });
-                    if (!correctPlacement) {
-                        optionElement.parentElement.style.display = 'none';
-                        continue;
-                    }
-                }
+                };
                 switch (id) {
                     case 'NAME': {
                         if (item.jsonType === 'magic') {
@@ -1073,6 +1264,15 @@ export class App extends BaseApp {
                         };
                         break;
                     }
+                    case 'CLONELIB': {
+                        optionElement.onclick = () => {
+                            this.libraries.cloneProxyLibrary(item).then((library) => {
+                                this.hideActionMenu();
+                            });
+                        };
+
+                        break;
+                    }
                     case 'ADDLIB': {
                         this.setElemText(optionId, 'Loading library status...');
                         this.preferences
@@ -1099,7 +1299,7 @@ export class App extends BaseApp {
                                     : ['Add', 'to'];
                                 this.setElemText(
                                     optionId,
-                                    `${libraryStatus[0]} document ${libraryStatus[1]} libraries`
+                                    `${libraryStatus[0]} library ${libraryStatus[1]} My Libraries`
                                 );
 
                                 optionElement.onclick = () => {
@@ -1118,6 +1318,7 @@ export class App extends BaseApp {
                             const inputElement = document.getElementById(
                                 optionId + '_lib-name'
                             ) as HTMLInputElement;
+
                             inputDiv.style.display = 'flex';
                             submitElement.onclick = (e) => {
                                 e.preventDefault();
@@ -1147,17 +1348,51 @@ export class App extends BaseApp {
                                     //alert user that input must be filled
                                     return;
                                 }
-                                this.libraries.getProxyLibrary(item.name).then((res) => {
-                                    if (res !== undefined) {
-                                        this.libraries.createProxyFolder(
-                                            res.library,
-                                            inputProxyElement.value
-                                        );
-                                        this.hideActionMenuOptionInputs();
-                                    } else {
-                                        //alert user that library is invalid
+                                //let libraryName: string, libraryId: string;
+                                let libraryId: string;
+                                let parent: BTGlobalTreeProxyInfo;
+                                if (backgroundMenu) {
+                                    libraryId = parentNode.projectId;
+                                    parent = parentNode;
+                                } else {
+                                    if (item.jsonType === 'proxy-library') {
+                                        libraryId = item.id;
+                                    } else if (item.jsonType === 'proxy-folder') {
+                                        libraryId = item.projectId;
+                                        parent = item;
                                     }
-                                });
+                                }
+                                // if (item.jsonType === 'proxy-library') {
+                                //     libraryName = item.name;
+                                // } else if (item.jsonType === 'proxy-folder') {
+                                //     libraryId = item.projectId;
+                                //     parent = item;
+                                // } else {
+                                //     console.error(
+                                //         'WHOOPS, this should not have been an availble option'
+                                //     );
+                                // }
+
+                                this.libraries
+                                    .getProxyLibrary(undefined, libraryId)
+                                    .then((res) => {
+                                        if (res !== undefined) {
+                                            this.libraries
+                                                .createProxyFolder(
+                                                    res.library,
+                                                    {
+                                                        jsonType: '',
+                                                        name: inputProxyElement.value,
+                                                    },
+                                                    parent
+                                                )
+                                                .then(() => {
+                                                    this.hideActionMenu();
+                                                });
+                                        } else {
+                                            //alert user that library is invalid
+                                        }
+                                    });
                             };
                         };
                         break;
@@ -1167,6 +1402,22 @@ export class App extends BaseApp {
                             const inputLibElement = document.getElementById(
                                 optionId + '_lib-name'
                             ) as HTMLInputElement;
+                            this.preferences.getAllLibraries().then((libraries) => {
+                                const libraryOptions: Array<{
+                                    id: string;
+                                    label: string;
+                                }> = [];
+                                libraries.forEach((library) => {
+                                    libraryOptions.push({
+                                        id: library.id,
+                                        label: library.name,
+                                    });
+                                    updateActionMenuInputOptions(
+                                        inputLibElement.id,
+                                        libraryOptions
+                                    );
+                                });
+                            });
                             inputDiv.style.display = 'flex';
                             submitElement.onclick = (e) => {
                                 e.preventDefault();
@@ -1176,12 +1427,28 @@ export class App extends BaseApp {
                                 }
                                 this.libraries.addNodeToProxyLibrary(
                                     item,
+                                    undefined,
                                     inputLibElement.value
                                 );
-                                this.hideActionMenuOptionInputs();
+                                this.hideActionMenu();
                             };
                         };
 
+                        break;
+                    }
+                    case 'RELIBDOC': {
+                        optionElement.onclick = () => {
+                            //item's parent is another proxy-folder
+                            this.libraries
+                                .removeNodeFromProxyLibrary(
+                                    item,
+                                    undefined,
+                                    this.currentBreadcrumbs[0].id // works for now, cheap fix
+                                )
+                                .then((res) => {
+                                    this.hideActionMenu();
+                                });
+                        };
                         break;
                     }
                     case 'ADDPROXYDOC': {
@@ -1192,6 +1459,47 @@ export class App extends BaseApp {
                             const inputProxyElement = document.getElementById(
                                 optionId + '_proxy-name'
                             ) as HTMLInputElement;
+                            this.preferences.getAllLibraries().then((libraries) => {
+                                const libraryOptions: Array<{
+                                    id: string;
+                                    label: string;
+                                }> = [];
+                                libraries.forEach((library) => {
+                                    libraryOptions.push({
+                                        id: library.id,
+                                        label: library.name,
+                                    });
+                                    updateActionMenuInputOptions(
+                                        inputLibElement.id,
+                                        libraryOptions
+                                    );
+                                });
+                            });
+                            inputLibElement.onchange = () => {
+                                const libraryId = inputLibElement.value;
+                                console.log(libraryId);
+                                this.libraries
+                                    .getProxyLibrary(undefined, libraryId, true)
+                                    .then((library) => {
+                                        console.log(library);
+                                        const descendants = library.descendants;
+                                        if (!descendants) return;
+                                        const folderOptions: Array<{
+                                            id: string;
+                                            label: string;
+                                        }> = [];
+                                        descendants.forEach((descendant) => {
+                                            folderOptions.push({
+                                                id: descendant.id,
+                                                label: descendant.name,
+                                            });
+                                        });
+                                        updateActionMenuInputOptions(
+                                            inputProxyElement.id,
+                                            folderOptions
+                                        );
+                                    });
+                            };
                             inputDiv.style.display = 'flex';
                             submitElement.onclick = (e) => {
                                 e.preventDefault();
@@ -1203,23 +1511,96 @@ export class App extends BaseApp {
                                     return;
                                 }
                                 this.libraries
-                                    .getProxyLibrary(inputLibElement.value)
+                                    .getProxyLibrary(undefined, inputLibElement.value)
                                     .then((res) => {
                                         if (res !== undefined) {
-                                            this.libraries.addNodeToProxyFolder(
-                                                item,
-                                                res.library,
-                                                {
+                                            this.libraries
+                                                .addNodeToProxyFolder(item, res.library, {
                                                     jsonType: 'proxy-folder',
-                                                    name: inputProxyElement.value,
-                                                }
-                                            );
-                                            this.hideActionMenuOptionInputs();
+                                                    id: inputProxyElement.value,
+                                                })
+                                                .then(() => {
+                                                    this.hideActionMenu();
+                                                });
                                         } else {
                                             //alert user that library is invalid
                                         }
                                     });
                             };
+                        };
+                        break;
+                    }
+                    case 'REPROXYDOC': {
+                        optionElement.onclick = () => {
+                            this.libraries
+                                .getProxyLibrary(
+                                    undefined,
+                                    this.currentBreadcrumbs[0].projectId
+                                ) // works for now, cheap fix
+                                .then((res) => {
+                                    if (res !== undefined) {
+                                        this.libraries
+                                            .removeNodeFromProxyFolder(
+                                                item,
+                                                res.library,
+                                                {
+                                                    jsonType: 'proxy-folder',
+                                                    id: this.currentBreadcrumbs[0].id, //works for now, cheap fix
+                                                }
+                                            )
+                                            .then(() => {
+                                                this.hideActionMenu();
+                                            });
+                                    }
+                                });
+                        };
+                        break;
+                    }
+                    case 'DELPROXY': {
+                        optionElement.onclick = () => {
+                            if (item.treeHref === undefined) {
+                                //item's parent is library
+                                this.libraries
+                                    .removeNodeFromProxyLibrary(
+                                        item,
+                                        undefined,
+                                        item.projectId
+                                    )
+                                    .then(() => {
+                                        this.hideActionMenu();
+                                    });
+                            } else {
+                                //item's parent is another proxy-folder
+                                this.libraries
+                                    .getProxyLibrary(undefined, item.projectId)
+                                    .then((res) => {
+                                        if (res !== undefined) {
+                                            this.libraries
+                                                .removeNodeFromProxyFolder(
+                                                    item,
+                                                    res.library,
+                                                    {
+                                                        jsonType: 'proxy-folder',
+                                                        name: item.treeHref,
+                                                    }
+                                                )
+                                                .then(() => {
+                                                    this.hideActionMenu();
+                                                });
+                                        }
+                                    });
+                            }
+                        };
+                        break;
+                    }
+                    case 'CLONEFOLDER': {
+                        optionElement.onclick = () => {
+                            this.libraries
+                                .createLibraryFromFolder(item)
+                                .then((library) => {
+                                    this.preferences.addLibrary(library);
+                                    this.hideActionMenu();
+                                });
                         };
                         break;
                     }
@@ -1242,7 +1623,7 @@ export class App extends BaseApp {
                 }
             }
             document.getElementById('docactionmenu_close').onclick = () => {
-                this.hideActionMenu();
+                this.hideActionMenuOptionInputs();
             };
             if (
                 actionMenuDiv.lastChild['className'] ===
@@ -1294,6 +1675,7 @@ export class App extends BaseApp {
         const actionMenuMainDiv = createDocumentElement('div', {
             id: 'docactionmenu',
             class: 'popover popup bs-popover-bottom',
+            style: 'border:none;display:none;',
         });
         let actionMenuDiv = createDocumentElement('div', {
             class: 'context-menu-list contextmenu-list list-has-icons context-menu-root',
@@ -1306,7 +1688,6 @@ export class App extends BaseApp {
             textContent: '🞬',
         });
         closeActionMenu.onclick = () => {
-            this.hideActionMenu();
             this.hideActionMenuOptionInputs();
         };
         actionMenuDiv.appendChild(closeActionMenu);
@@ -1320,6 +1701,17 @@ export class App extends BaseApp {
                 id: 'docactionmenu_' + option.name,
                 textContent: option.label,
             });
+            if (option.deleteIcon === true) {
+                const actionMenuOptionDeleteIcon = createDocumentElement('svg', {
+                    class: 'context-menu-icon',
+                    xmlns: 'http://www.w3.org/2000/svg',
+                });
+                const actionMenuOptionDeleteIconUse = createDocumentElement('use', {
+                    href: '#svg-icon-clear-field-button',
+                });
+                actionMenuOptionDeleteIcon.appendChild(actionMenuOptionDeleteIconUse);
+                actionMenuOptionList.appendChild(actionMenuOptionDeleteIcon);
+            }
             actionMenuOptionList.appendChild(actionMenuOptionSpan);
             if (option.input !== undefined) {
                 const actionMenuOptionInputParentDiv = createDocumentElement('div', {
@@ -1336,12 +1728,26 @@ export class App extends BaseApp {
                         style: 'text-wrap: nowrap;',
                     });
                     actionMenuOptionInputDiv.appendChild(actionMenuOptionInputLabel);
-                    const actionMenuOptionInputInput = createDocumentElement('input', {
-                        id: 'docactionmenu_' + option.name + '_' + input.name,
-                        style: 'width: 5em;height: 1.5em;border: solid black 1px;border-top: 0px;border-left: 0px;border-right: 0px;outline: none;',
-                    });
+                    if (input.type === 'text') {
+                        const actionMenuOptionInputInput = createDocumentElement(
+                            'input',
+                            {
+                                id: 'docactionmenu_' + option.name + '_' + input.name,
+                                style: 'width: 5em;height: 1.5em;border: solid black 1px;border-top: 0px;border-left: 0px;border-right: 0px;outline: none;',
+                            }
+                        );
+                        actionMenuOptionInputDiv.appendChild(actionMenuOptionInputInput);
+                    } else if (input.type === 'select') {
+                        const actionMenuOptionInputSelect = createDocumentElement(
+                            'select',
+                            {
+                                id: 'docactionmenu_' + option.name + '_' + input.name,
+                                style: 'width: 5em;height: 1.5em;border: solid black 1px;border-top: 0px;border-left: 0px;border-right: 0px;outline: none;',
+                            }
+                        );
 
-                    actionMenuOptionInputDiv.appendChild(actionMenuOptionInputInput);
+                        actionMenuOptionInputDiv.appendChild(actionMenuOptionInputSelect);
+                    }
                     actionMenuOptionInputParentDiv.appendChild(actionMenuOptionInputDiv);
                 }
                 const actionMenuOptionInputSubmit = createDocumentElement('button', {
@@ -2112,77 +2518,27 @@ export class App extends BaseApp {
                             }
                         };
                     }
-                    itemParentGroup.append(
-                        genEnumOption(itemConfig, index, onchange, ongenerate)
-                    );
+
                     const currentlySelectedConfig = nodeInfo['configuration'];
                     if (currentlySelectedConfig) {
                         let savedConfigObject = JSON.parse(currentlySelectedConfig);
-                        // if(itemConfig.configurationParameters.length > 1){
                         for (let i in itemConfig.configurationParameters) {
                             const configurationParameters =
                                 itemConfig.configurationParameters[i];
 
-                            let selectElement;
                             const savedConfigValue =
                                 savedConfigObject[configurationParameters.parameterId];
-
-                            switch (configurationParameters.btType) {
-                                case 'BTMConfigurationParameterEnum-105': {
-                                    selectElement = document.querySelectorAll(
-                                        '[data-id="' +
-                                            configurationParameters['parameterId'] +
-                                            '"]'
-                                    )[0];
-                                    const currentOptions =
-                                        configurationParameters['options'];
-                                    currentOptions.forEach(
-                                        (configOption: BTMEnumOption592) => {
-                                            if (configOption.option == savedConfigValue) {
-                                                selectElement['value'] = savedConfigValue; //doing this so that a invalid config doesn't cause issues
-                                            }
-                                        }
-                                    );
-                                    break;
-                                }
-                                case 'BTMConfigurationParameterString-872': {
-                                    selectElement = document.querySelectorAll(
-                                        '[data-id="' +
-                                            configurationParameters['value'].parameterId +
-                                            '"]'
-                                    )[0];
-                                    selectElement.value = savedConfigValue;
-                                    break;
-                                }
-                                case 'BTMConfigurationParameterBoolean-2550': {
-                                    //not sure if this works
-                                    selectElement = document.querySelectorAll(
-                                        '[data-id="' +
-                                            configurationParameters['value'].parameterId +
-                                            '"]'
-                                    )[0];
-                                    //set string to boolean, not neceesary?
-                                    // savedConfigValue = savedConfigValue == "true";
-                                    selectElement.value = savedConfigValue;
-                                    break;
-                                }
-                                case 'BTMConfigurationParameterQuantity-1826': {
-                                    selectElement = document.querySelectorAll(
-                                        '[data-id="' +
-                                            configurationParameters['parameterId'] +
-                                            '"]'
-                                    )[0];
-                                    selectElement.value = savedConfigValue;
-                                    break;
-                                }
-                            }
+                            configurationParameters['defaultValue'] = savedConfigValue;
                         }
-
-                        //itemconfig.configurationParameters.options[i].option == nodeItem.configuration then edit tsx data-id="List_3q8Nbgu4UdEuGX" .value = [i].option and update UI
-
-                        //itemconfig.configurationParameters.options[i].option == nodeItem.configuration then edit tsx data-id="List_3q8Nbgu4UdEuGX" .value = [i].option and update UI
-                        this.updateConfigurationUI(item, index);
                     }
+                    itemParentGroup.append(
+                        genEnumOption(itemConfig, index, onchange, ongenerate)
+                    );
+                    document
+                        .querySelectorAll('select[savedconfigurationvalue]')
+                        .forEach((elem: HTMLInputElement) => {
+                            elem.value = elem.getAttribute('savedconfigurationvalue');
+                        });
                     resolve(result);
                 }
             );
@@ -2598,23 +2954,24 @@ export class App extends BaseApp {
         this.preferences
             .getLibraryByIndex(index, refreshNodes === true) //only refresh if we are getting first node
             .then((res: BTGlobalTreeNodeInfo[]) => {
-                if (res === undefined && res === undefined) {
+                const pathToRoot = [
+                    {
+                        jsonType: 'magic',
+                        resourceType: 'magic',
+                        id: 'LI',
+                        name: 'Libraries',
+                    },
+                ];
+                this.setBreadcrumbs(pathToRoot);
+                if (res === undefined || res === null) {
                     return;
                 }
                 const recentNode: BTGlobalTreeNodesInfo = {
-                    pathToRoot: [
-                        {
-                            jsonType: 'magic',
-                            resourceType: 'magic',
-                            id: 'LI',
-                            name: 'Libraries',
-                        },
-                    ],
+                    pathToRoot,
                     next: (index + 1).toString(),
                     href: undefined,
                     items: res,
                 };
-                this.setBreadcrumbs(recentNode.pathToRoot);
                 this.ProcessNodeResults(recentNode, undefined, true);
             });
     }
@@ -2626,23 +2983,24 @@ export class App extends BaseApp {
         this.preferences
             .getFavoritedByIndex(index, refreshNodes === true) //only refresh if we are getting first node
             .then((res: BTGlobalTreeNodeInfo[]) => {
-                if (res === undefined && res === undefined) {
+                const pathToRoot = [
+                    {
+                        jsonType: 'magic',
+                        resourceType: 'magic',
+                        id: 'FV',
+                        name: 'Favorited',
+                    },
+                ];
+                this.setBreadcrumbs(pathToRoot);
+                if (res === undefined || res === null) {
                     return;
                 }
                 const recentNode: BTGlobalTreeNodesInfo = {
-                    pathToRoot: [
-                        {
-                            jsonType: 'magic',
-                            resourceType: 'magic',
-                            id: 'FV',
-                            name: 'Favorited',
-                        },
-                    ],
+                    pathToRoot,
                     next: (index + 1).toString(),
                     href: undefined,
                     items: res,
                 };
-                this.setBreadcrumbs(recentNode.pathToRoot);
                 this.ProcessNodeResults(recentNode, undefined, true);
             });
     }
@@ -2654,23 +3012,24 @@ export class App extends BaseApp {
         this.preferences
             .getRecentlyInsertedByIndex(index, refreshNodes === true) //only refresh if we are getting first node
             .then((res: BTGlobalTreeNodeInfo[]) => {
-                if (res === undefined && res === undefined) {
+                const pathToRoot = [
+                    {
+                        jsonType: 'magic',
+                        resourceType: 'magic',
+                        id: 'RI',
+                        name: 'Recently Inserted',
+                    },
+                ];
+                this.setBreadcrumbs(pathToRoot);
+                if (res === undefined || res === null) {
                     return;
                 }
                 const recentNode: BTGlobalTreeNodesInfo = {
-                    pathToRoot: [
-                        {
-                            jsonType: 'magic',
-                            resourceType: 'magic',
-                            id: 'RI',
-                            name: 'Recently Inserted',
-                        },
-                    ],
+                    pathToRoot,
                     next: (index + 1).toString(),
                     href: undefined,
                     items: res,
                 };
-                this.setBreadcrumbs(recentNode.pathToRoot);
                 this.ProcessNodeResults(recentNode, undefined, true);
             });
     }
@@ -2687,6 +3046,7 @@ export class App extends BaseApp {
             return;
         } else if (magic === 'LI') {
             this.processLibrariesNode(0, true);
+            return;
         }
         // uri: string) {
         // Get Onshape to return the list
@@ -2756,6 +3116,7 @@ export class App extends BaseApp {
         teamroot?: BTGlobalTreeNodeInfo,
         subsetConfigurables?: boolean
     ) {
+        console.log(info);
         const nodes = info as BTGlobalTreeNodesInfo;
         // When it does, append all the elements to the UI
         this.appendElements(
@@ -2805,10 +3166,9 @@ export class App extends BaseApp {
      * @param teamroot Preserved team root so that we know when we are processing a folder under a team
      */
     public gotoFolder(item: BTGlobalTreeNodeInfo, teamroot?: BTGlobalTreeNodeInfo): void {
+        console.log(item);
         this.hidePopup();
         this.hideActionMenu();
-
-        this.saveLastLocation({ folder: item, teamroot: teamroot });
 
         // Note that we are running and reset the count of entries we have gotten
         this.loaded = 0;
@@ -2834,6 +3194,13 @@ export class App extends BaseApp {
                     includeSurfaces: false,
                 })
                 .then((res) => {
+                    if (
+                        res.pathToRoot &&
+                        res.pathToRoot[0] &&
+                        res.pathToRoot[0].resourceType === 'team'
+                    ) {
+                        res.pathToRoot[0].jsonType = 'team-summary'; //fix pathToRoot because it has all the right information except jsonType
+                    }
                     this.setBreadcrumbs(res.pathToRoot, item);
                     this.ProcessNodeResults(res, item);
                 })
@@ -2843,44 +3210,31 @@ export class App extends BaseApp {
                 });
         } else if (item.jsonType === 'proxy-library') {
             console.log('Going to a proxy library');
-            this.libraries.getProxyLibrary(item.name).then((res) => {
-                const pathToRoot = [
-                    {
-                        jsonType: item.jsonType,
-                        resourceType: item.resourceType,
-                        id: item.name,
-                        name: item.name,
-                    },
-                ];
-                this.setBreadcrumbs(pathToRoot, teamroot);
+            console.log(item);
+            this.libraries.getProxyLibrary(undefined, item.id).then((res) => {
+                this.addBreadcrumbNode(item);
+                this.setBreadcrumbs(this.currentBreadcrumbs, teamroot);
                 this.ProcessNodeResults(
                     {
                         items: res.contents,
-                        pathToRoot,
+                        pathToRoot: this.currentBreadcrumbs,
                     },
                     teamroot
                 );
             });
         } else if (item.jsonType === 'proxy-folder') {
             console.log('Going to a proxy folder');
-            this.libraries.getProxyLibrary(this.currentBreadcrumbs[0].id).then((res) => {//using breadcrumbs is a cheap fix
+            this.libraries.getProxyLibrary(undefined, item.projectId).then((res) => {
                 if (res !== undefined) {
                     const { library } = res;
-                    const pathToRoot = [
-                        {
-                            jsonType: item.jsonType,
-                            resourceType: item.resourceType,
-                            id: item.id,
-                            name: item.name,
-                        },
-                    ];
+                    this.addBreadcrumbNode(item);
                     //use breadcrumbs for library
-                    this.libraries.getProxyFolder(library, item.name).then((res) => {
-                        this.setBreadcrumbs(pathToRoot, teamroot);
+                    this.libraries.getProxyFolder(library, item.id).then((res) => {
+                        this.setBreadcrumbs(this.currentBreadcrumbs, teamroot);
                         this.ProcessNodeResults(
                             {
                                 items: res,
-                                pathToRoot,
+                                pathToRoot: this.currentBreadcrumbs,
                             },
                             teamroot
                         );
@@ -2892,6 +3246,7 @@ export class App extends BaseApp {
         } else if (item.jsonType === 'magic' || item.resourceType === 'magic') {
             this.processMagicNode(item.id);
         } else {
+            console.log('generic folder', item);
             this.onshape.globalTreeNodesApi
                 .globalTreeNodesFolderInsertables({
                     fid: item.id,
@@ -2903,7 +3258,10 @@ export class App extends BaseApp {
                     includeSurfaces: false,
                 })
                 .then((res) => {
-                    this.setBreadcrumbs(res.pathToRoot, teamroot);
+                    console.log('generic folder information', res);
+                    this.addBreadcrumbNode(
+                        (res && res.pathToRoot && res.pathToRoot[0]) || item
+                    );
                     this.ProcessNodeResults(res, teamroot);
                 })
                 .catch((err) => {

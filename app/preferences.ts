@@ -35,6 +35,8 @@ import {
     BTGlobalTreeNodeInfoFromJSONTyped,
     GetAssociativeDataWvmEnum,
 } from 'onshape-typescript-fetch';
+import { magicIconInfo } from './app';
+import { OnshapeSVGIcon } from './onshape/svgicon';
 
 const PREFERENCE_FILE_NAME = '⚙ Preferences ⚙';
 
@@ -246,7 +248,76 @@ export class Preferences {
         location: Array<BTGlobalTreeNodeInfo>,
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
+        console.log('-------', location);
         return this.setBTGArray('last_known_location', location, libInfo);
+    }
+
+    public translateHomeItemsToBTGlobalTreeNodeInfo(
+      items: { [item: string]: magicIconInfo | BTGlobalTreeNodeInfo }
+    ): Array<BTGlobalTreeNodeInfo>{
+      const itemInfoArray: BTGlobalTreeNodeInfo[] = [];
+      let itemInfo: magicIconInfo | BTGlobalTreeNodeInfo;
+      for(let id in items){
+        itemInfo = items[id];
+        if(itemInfo['jsonType'] !== undefined && itemInfo['jsonType'] !== null)itemInfoArray.push(itemInfo as BTGlobalTreeNodeInfo)
+        itemInfo = itemInfo as magicIconInfo;
+        itemInfoArray.push({
+          jsonType: "magicHome",
+          id,
+          name: itemInfo.label,
+          description: itemInfo.icon
+        })
+      }
+      return itemInfoArray
+    }
+    public translateHomeItemsFromBTGlobalTreeNodeInfo(
+      items: Array<BTGlobalTreeNodeInfo>
+    ): { [item: string]: magicIconInfo | BTGlobalTreeNodeInfo}{
+      const homeObject: { [item: string]: magicIconInfo | BTGlobalTreeNodeInfo } = {};
+      items.forEach((item)=>{
+        if(item.jsonType === 'magicHome'){
+          homeObject[item.id] = {
+            label: item.name,
+            icon: item.description as OnshapeSVGIcon
+          }
+        }else{
+          homeObject[item.jsonType] = item;
+        }
+      })
+      return homeObject;
+    }
+    /**
+     * Adds an home item to the home menu
+     * @param item item to add
+     * @returns Success/failure indicator
+     */
+    public addHomeItem(
+        item: BTGlobalTreeNodeInfo | magicIconInfo,
+        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
+    ): Promise<boolean> {
+        return new Promise((resolve, reject) => {
+            const BTItem = this.translateHomeItemsToBTGlobalTreeNodeInfo({" ":item})[0];
+            this.getBTGArray('home', libInfo).then((homeList) => {
+                const newHomeList: BTGlobalTreeNodeInfo[] = [];
+                let homeItem: BTGlobalTreeNodeMagicDataInfo;
+                let duplicate: BTGlobalTreeNodeMagicDataInfo;
+                //Iterate favoriteList and don't add duplicates to new list
+                homeList.unshift(BTItem);
+                for (let i in homeList) {
+                    homeItem = homeList[i];
+                    duplicate = newHomeList.find(
+                        (element: BTGlobalTreeNodeMagicDataInfo) => {
+                            return (
+                                element.id === homeItem.id &&
+                                element.jsonType === homeItem.jsonType
+                            );
+                        }
+                    );
+                    if (duplicate === undefined) newHomeList.push(homeItem);
+                }
+                resolve(this.setHome(homeList));
+            });
+        });
     }
 
     /**
@@ -255,10 +326,10 @@ export class Preferences {
      * @returns Success/failure indicator
      */
     public setHome(
-        location: Array<BTGlobalTreeNodeInfo>,
+        items: Array<BTGlobalTreeNodeInfo>,
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
-        return this.setBTGArray('home', location, libInfo);
+        return this.setBTGArray('home', items, libInfo);
     }
 
     /**
@@ -589,7 +660,17 @@ export class Preferences {
     public getBTGArray(
         pref_name: string,
         libInfo: BTGlobalTreeProxyInfo
-    ): Promise<Array<BTGlobalTreeNodeInfo | BTGlobalTreeNodeInfo>> {
+    ): Promise<Array<BTGlobalTreeNodeInfo>>;
+    public getBTGArray(
+        pref_name: Array<string>,
+        libInfo: BTGlobalTreeProxyInfo
+    ): Promise<{ [pref_name: string]: Array<BTGlobalTreeNodeInfo> }>;
+    public getBTGArray(
+        pref_name: string | Array<string>,
+        libInfo: BTGlobalTreeProxyInfo
+    ): Promise<
+        Array<BTGlobalTreeNodeInfo> | { [pref_name: string]: Array<BTGlobalTreeNodeInfo> }
+    > {
         return new Promise((resolve, _reject) => {
             this.onshape.appElementApi
                 .getJson({
@@ -599,15 +680,38 @@ export class Preferences {
                     wvm: 'w',
                 })
                 .then((res) => {
-                    let result: Array<BTGlobalTreeNodeInfo> = [];
                     console.log(res.tree);
-                    for (let btg_json of res.tree[pref_name]) {
-                        result.push(
-                            BTGlobalTreeNodeMagicDataInfoJSONTyped(btg_json, false)
-                        );
+                    console.log(pref_name);
+                    if (Array.isArray(pref_name)) {
+                        const pref_names = pref_name;
+                        let allResults: {
+                            [pref_name: string]: Array<BTGlobalTreeNodeInfo>;
+                        } = {};
+                        for (let pref_name of pref_names) {
+                            allResults[pref_name] = [];
+                            for (let btg_json of res.tree[pref_name]) {
+                                allResults[pref_name].push(
+                                    BTGlobalTreeNodeMagicDataInfoJSONTyped(
+                                        btg_json,
+                                        false
+                                    )
+                                );
+                            }
+                        }
+                        console.log(allResults);
+                        resolve(allResults);
+                    } else {
+                        const result: Array<BTGlobalTreeNodeInfo> = [];
+                        pref_name = pref_name as string;
+                        for (let btg_json of res.tree[pref_name]) {
+                            console.log(pref_name);
+                            result.push(
+                                BTGlobalTreeNodeMagicDataInfoJSONTyped(btg_json, false)
+                            );
+                        }
+                        console.log(result);
+                        resolve(result);
                     }
-                    console.log(result);
-                    resolve(result);
                 })
                 .catch((err) => {
                     console.log(err);
