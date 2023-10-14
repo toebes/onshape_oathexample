@@ -34,7 +34,6 @@ import {
     BTGlobalTreeNodeInfo,
     BTGlobalTreeNodeInfoFromJSONTyped,
     GetAssociativeDataWvmEnum,
-    UploadFileCreateElementRequest,
 } from 'onshape-typescript-fetch';
 import { magicIconInfo } from './app';
 import { OnshapeSVGIcon } from './onshape/svgicon';
@@ -129,14 +128,34 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            /* Backward compatability from when this was needed for JsonPatch */
-            this.setCustom(name, "", libInfo)
-            .then((res) => {
-                resolve(res);
-            })
-            .catch((err) => {
-                resolve(false);
-            });
+            this.existsEntry(name, libInfo)
+                .then((res) => {
+                    if (!res) {
+                        this.onshape.appElementApi
+                            .updateAppElement({
+                                bTAppElementUpdateParams: {
+                                    jsonPatch: `[{ "op": "add", "path": "/${name}", "value": "" }]`,
+                                },
+                                did: libInfo.id,
+                                eid: libInfo.elementId,
+                                wvmid: libInfo.wvmid,
+                                wvm: 'w',
+                            })
+                            .then((create_res) => {
+                                resolve(true);
+                            })
+                            .catch((err) => {
+                                console.log(err);
+                                resolve(false);
+                            });
+                    } else {
+                        // The entry already existed!
+                        resolve(false);
+                    }
+                })
+                .catch((err) => {
+                    resolve(false);
+                });
         });
     }
 
@@ -152,36 +171,35 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            this.getAppJson(libInfo)
+            this.existsEntry(name, libInfo)
                 .then((res) => {
-                    res[name] = element;
-                    this.onshape.blobElementApi.uploadFileUpdateElement(
-                        {
-                            encodedFilename: res["appName"],
-                            did: libInfo.id,
-                            wid: libInfo.wvmid,
-                            eid: libInfo.elementId,
-
-                            // HACK The API expects a Blob type, however if you pass it a blob it formats
-                            // and POSTs it as a binary file no matter what. This needs to be passed as a string for
-                            // the needs of the Preferences API.
-                            file: JSON.stringify(res) as unknown as Blob,
-                        })
-                        .then((res2) => {
-                            resolve(true);
-                        })
-                        .catch((err) => {
-                            resolve(false);
-                    });
-
-                    resolve(true);
+                    if (res) {
+                        this.onshape.appElementApi
+                            .updateAppElement({
+                                bTAppElementUpdateParams: {
+                                    jsonPatch: `[{ "op": "replace", "path": "/${name}", "value": "${element}" }]`,
+                                },
+                                did: libInfo.id,
+                                eid: libInfo.elementId,
+                                wvmid: libInfo.wvmid,
+                                wvm: 'w',
+                            })
+                            .then((res) => {
+                                resolve(true);
+                            })
+                            .catch((err) => {
+                                resolve(false);
+                            });
+                    } else {
+                        // The entry did not exist, it must be created first!
+                        resolve(false);
+                    }
                 })
                 .catch((err) => {
                     resolve(false);
                 });
         });
     }
-
 
     /**
      * Returns the element which was stored as a JSON object as an object.
@@ -195,9 +213,15 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<any> {
         return new Promise((resolve, _reject) => {
-            this.getAppJson(libInfo)
+            this.onshape.appElementApi
+                .getJson({
+                    did: libInfo.id,
+                    eid: libInfo.elementId,
+                    wvmid: libInfo.wvmid,
+                    wvm: 'w',
+                })
                 .then((res) => {
-                    resolve(res[name]);
+                    resolve(res.tree[name]);
                 })
                 .catch((err) => {
                     console.log(err);
@@ -224,75 +248,8 @@ export class Preferences {
         location: Array<BTGlobalTreeNodeInfo>,
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
+        console.log('-------', location);
         return this.setBTGArray('last_known_location', location, libInfo);
-    }
-
-    public translateHomeItemsToBTGlobalTreeNodeInfo(
-      items: { [item: string]: magicIconInfo | BTGlobalTreeNodeInfo }
-    ): Array<BTGlobalTreeNodeInfo>{
-      const itemInfoArray: BTGlobalTreeNodeInfo[] = [];
-      let itemInfo: magicIconInfo | BTGlobalTreeNodeInfo;
-      for(let id in items){
-        itemInfo = items[id];
-        if(itemInfo['jsonType'] !== undefined && itemInfo['jsonType'] !== null)itemInfoArray.push(itemInfo as BTGlobalTreeNodeInfo)
-        itemInfo = itemInfo as magicIconInfo;
-        itemInfoArray.push({
-          jsonType: "magicHome",
-          id,
-          name: itemInfo.label,
-          description: itemInfo.icon
-        })
-      }
-      return itemInfoArray
-    }
-    public translateHomeItemsFromBTGlobalTreeNodeInfo(
-      items: Array<BTGlobalTreeNodeInfo>
-    ): { [item: string]: magicIconInfo | BTGlobalTreeNodeInfo}{
-      const homeObject: { [item: string]: magicIconInfo | BTGlobalTreeNodeInfo } = {};
-      items.forEach((item)=>{
-        if(item.jsonType === 'magicHome'){
-          homeObject[item.id] = {
-            label: item.name,
-            icon: item.description as OnshapeSVGIcon
-          }
-        }else{
-          homeObject[item.jsonType] = item;
-        }
-      })
-      return homeObject;
-    }
-    /**
-     * Adds an home item to the home menu
-     * @param item item to add
-     * @returns Success/failure indicator
-     */
-    public addHomeItem(
-        item: BTGlobalTreeNodeInfo | magicIconInfo,
-        libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
-    ): Promise<boolean> {
-        return new Promise((resolve, reject) => {
-            const BTItem = this.translateHomeItemsToBTGlobalTreeNodeInfo({" ":item})[0];
-            this.getBTGArray('home', libInfo).then((homeList) => {
-                const newHomeList: BTGlobalTreeNodeInfo[] = [];
-                let homeItem: BTGlobalTreeNodeMagicDataInfo;
-                let duplicate: BTGlobalTreeNodeMagicDataInfo;
-                //Iterate favoriteList and don't add duplicates to new list
-                homeList.unshift(BTItem);
-                for (let i in homeList) {
-                    homeItem = homeList[i];
-                    duplicate = newHomeList.find(
-                        (element: BTGlobalTreeNodeMagicDataInfo) => {
-                            return (
-                                element.id === homeItem.id &&
-                                element.jsonType === homeItem.jsonType
-                            );
-                        }
-                    );
-                    if (duplicate === undefined) newHomeList.push(homeItem);
-                }
-                resolve(this.setHome(homeList));
-            });
-        });
     }
 
     /**
@@ -327,7 +284,6 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            console.log(item);
             this.getAllFavorited().then((favoriteList: BTGlobalTreeNodeInfo[]) => {
                 const newFavoriteList: BTGlobalTreeNodeInfo[] = [];
                 let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
@@ -364,7 +320,6 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            console.log(item);
             this.getAllLibraries().then((libraryList: BTGlobalTreeNodeInfo[]) => {
                 const newLibraryList: BTGlobalTreeNodeInfo[] = [];
                 let libraryItem: BTGlobalTreeNodeMagicDataInfo;
@@ -401,7 +356,6 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            console.log(item);
             this.getAllFavorited().then((favoriteList: BTGlobalTreeNodeInfo[]) => {
                 const newFavoriteList: BTGlobalTreeNodeInfo[] = [];
                 let favoriteItem: BTGlobalTreeNodeMagicDataInfo;
@@ -431,7 +385,6 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            console.log(item);
             this.getAllLibraries().then((libraryList: BTGlobalTreeNodeInfo[]) => {
                 const newLibraryList: BTGlobalTreeNodeInfo[] = [];
                 let libraryItem: BTGlobalTreeNodeMagicDataInfo;
@@ -461,7 +414,6 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo = this.userPreferencesInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            console.log(item);
             this.getAllRecentlyInserted().then((recentList: BTGlobalTreeNodeInfo[]) => {
                 const newRecentList: BTGlobalTreeNodeInfo[] = [];
                 let recentItem: BTGlobalTreeNodeMagicDataInfo;
@@ -590,27 +542,45 @@ export class Preferences {
         libInfo: BTGlobalTreeProxyInfo
     ): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            this.getAppJson(libInfo)
+            console.log('setting btg array ' + pref_name, array, 'in lib', libInfo);
+            console.groupCollapsed('trace');
+            console.trace();
+            console.groupEnd();
+            this.existsEntry(pref_name, libInfo)
                 .then((res) => {
-                    res[pref_name] = array;
-                    this.onshape.blobElementApi.uploadFileUpdateElement(
-                        {
-                            encodedFilename: res["appName"],
-                            did: libInfo.id,
-                            wid: libInfo.wvmid,
-                            eid: libInfo.elementId,
-
-                            // HACK The API expects a Blob type, however if you pass it a blob it formats
-                            // and POSTs it as a binary file no matter what. This needs to be passed as a string for
-                            // the needs of the Preferences API.
-                            file: JSON.stringify(res) as unknown as Blob,
-                        })
-                        .then((res) => {
-                            resolve(true);
-                        })
-                        .catch((err) => {
-                            resolve(false);
-                        });
+                    if (res) {
+                        this.onshape.appElementApi
+                            .updateAppElement({
+                                bTAppElementUpdateParams: {
+                                    jsonPatch: `[{ "op": "replace", "path": "/${pref_name}", "value": ${JSON.stringify(
+                                        array
+                                    )} }]`,
+                                },
+                                did: libInfo.id,
+                                eid: libInfo.elementId,
+                                wvmid: libInfo.wvmid,
+                                wvm: 'w',
+                            })
+                            .then((res) => {
+                                resolve(true);
+                            })
+                            .catch((err) => {
+                                resolve(false);
+                            });
+                    } else {
+                        // The entry did not exist, so create the entry then call this method again.
+                        this.createCustom(pref_name, libInfo)
+                            .then((res) => {
+                                this.setBTGArray(pref_name, array, libInfo)
+                                    .then((res2) => resolve(res2))
+                                    .catch((err) => {
+                                        resolve(false);
+                                    });
+                            })
+                            .catch((err) => {
+                                resolve(false);
+                            });
+                    }
                 })
                 .catch((err) => {
                     resolve(false);
@@ -633,16 +603,27 @@ export class Preferences {
         Array<BTGlobalTreeNodeInfo> | { [pref_name: string]: Array<BTGlobalTreeNodeInfo> }
     > {
         return new Promise((resolve, _reject) => {
-            this.getAppJson(libInfo)
+            this.onshape.appElementApi
+                .getJson({
+                    did: libInfo.id,
+                    eid: libInfo.elementId,
+                    wvmid: libInfo.wvmid,
+                    wvm: 'w',
+                })
                 .then((res) => {
+                    console.log(res.tree);
+                    console.log(pref_name, libInfo);
+                    console.groupCollapsed('trace');
+                    console.trace();
+                    console.groupEnd();
                     if (Array.isArray(pref_name)) {
                         const pref_names = pref_name;
-                            let allResults: {
-                                [pref_name: string]: Array<BTGlobalTreeNodeInfo>;
-                            } = {};
-                            for (let pref_name of pref_names) {
-                                allResults[pref_name] = [];
-                            for (let btg_json of res[pref_name]) {
+                        let allResults: {
+                            [pref_name: string]: Array<BTGlobalTreeNodeInfo>;
+                        } = {};
+                        for (let pref_name of pref_names) {
+                            allResults[pref_name] = [];
+                            for (let btg_json of res.tree[pref_name]) {
                                 allResults[pref_name].push(
                                     BTGlobalTreeNodeMagicDataInfoJSONTyped(
                                         btg_json,
@@ -651,15 +632,17 @@ export class Preferences {
                                 );
                             }
                         }
+                        console.log(allResults);
                         resolve(allResults);
                     } else {
                         const result: Array<BTGlobalTreeNodeInfo> = [];
                         pref_name = pref_name as string;
-                        for (let btg_json of res[pref_name]) {
+                        for (let btg_json of res.tree[pref_name]) {
                             result.push(
                                 BTGlobalTreeNodeMagicDataInfoJSONTyped(btg_json, false)
                             );
                         }
+                        console.log(result);
                         resolve(result);
                     }
                 })
@@ -671,24 +654,25 @@ export class Preferences {
     }
 
     /**
-     * Returns the underlying JSON storage for this application.
+     * Returns if there already exists a preference JSON entry for 'name' in the user
+     * preferences app element data.
      *
-     * @param libinfo The BTGTree containing info about which blob element to pull from./
+     * @param name Name of element to retrieve
      */
-    public getAppJson(libInfo: BTGlobalTreeProxyInfo): Promise<JSON> {
+    public existsEntry(name: string, libInfo: BTGlobalTreeProxyInfo): Promise<boolean> {
         return new Promise((resolve, _reject) => {
-            this.onshape.blobElementApi.downloadFileWorkspace({
+            this.onshape.appElementApi
+                .getJson({
                     did: libInfo.id,
                     eid: libInfo.elementId,
-                    wid: libInfo.wvmid,
+                    wvmid: libInfo.wvmid,
+                    wvm: 'w',
                 })
                 .then((res) => {
-                    console.log(res)
-                    const resJson: JSON = JSON.parse(String(res));
-                    resolve(resJson);
+                    resolve(res.tree.hasOwnProperty(name));
                 })
                 .catch((err) => {
-                    resolve({} as JSON);
+                    resolve(false);
                 });
         });
     }
@@ -723,7 +707,10 @@ export class Preferences {
         return new Promise((resolve, reject) => {
             let elem_found: Boolean = false;
             for (let element of elements) {
-                if (element.name === appName && element.type === "Blob") {
+                if (
+                    element.name == appName &&
+                    element.dataType == 'onshape-app/preferences'
+                ) {
                     libInfo.elementId = element.id;
                     resolve(libInfo);
                     elem_found = true;
@@ -731,22 +718,17 @@ export class Preferences {
             }
 
             if (!elem_found) {
-                const str = JSON.stringify({ "appName": appName});
-
-                this.onshape.blobElementApi.uploadFileCreateElement(
-                        {
-                            encodedFilename: appName,
-                            did: libInfo.id,
-                            wid: libInfo.wvmid,
-
-                            // HACK The API expects a Blob type, however if you pass it a blob it formats
-                            // and POSTs it as a binary file no matter what. This needs to be passed as a string for
-                            // the needs of the Preferences API.
-                            file: str as unknown as Blob,
-                            storeInDocument: true,
-                        })
+                this.onshape.appElementApi
+                    .createElement({
+                        bTAppElementParams: {
+                            formatId: 'preferences',
+                            name: appName,
+                        },
+                        did: libInfo.id,
+                        wid: libInfo.wvmid,
+                    })
                     .then((res) => {
-                        libInfo.elementId = res.id;
+                        libInfo.elementId = res.elementId;
                         console.log('Created new app element since it did not exist.');
                         resolve(libInfo);
                     })
@@ -810,7 +792,7 @@ export class Preferences {
                         reject(err);
                     });
             } else {
-                // The user preferences document did not exists, so make a new one and return the
+                // The user preferences document does not exist, so make a new one and return the
                 // BTG info for the newly created document.
                 this.onshape.documentApi
                     .createDocument({
@@ -824,16 +806,14 @@ export class Preferences {
                         console.log(
                             'Created new preferences document since it did not exist.'
                         );
-
                         this.userPreferencesInfo = BTGlobalTreeProxyInfoJSONTyped(
                             {
                                 id: res.id,
-                                wvmid: res.id,
+                                wvmid: res.defaultWorkspace.id,
                                 wvm: GetAssociativeDataWvmEnum['w'],
                             },
                             true
                         );
-
                         resolve(this.userPreferencesInfo);
                     })
                     .catch((err) => {
@@ -857,9 +837,9 @@ export class Preferences {
     //     name: string
     // ): Promise<BTGlobalTreeNodeInfo> {
     //     return new Promise((resolve, _reject) => {
-    //          const result: BTGlobalTreeNodeInfo = {
-    //              jsonType: 'proxy-library',
-    //              name: name,
+    //         const result: BTGlobalTreeNodeInfo = {
+    //             jsonType: 'proxy-library',
+    //             name: name,
     //         };
     //         resolve(undefined);
     //     });

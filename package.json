@@ -25,12 +25,13 @@
     "svg-url-loader": "^8.0.0",
     "ts-loader": "^9.4.2",
     "typescript": "^4.9.5",
-    "webpack-bundle-analyzer": "^4.9.0",
+    "webpack-bundle-analyzer": "^4.9.1",
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
     "bootstrap": "^5.2.3",
     "js-cookie": "^3.0.1",
-    "onshape-typescript-fetch": "github:toebes/onshape-typescript-fetch"
+    "onshape-typescript-fetch": "github:toebes/onshape-typescript-fetch",
+    "style-loader": "^3.3.3"
   }
 }
