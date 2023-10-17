@@ -613,12 +613,11 @@ export class Preferences {
                     wid: libInfo.wvmid,
                 })
                 .then((res) => {
-                    console.log(res)
-                    const resJson: JSON = JSON.parse(String(res));
+                    const resJson: JSON = JSON.parse(res);
                     resolve(resJson);
                 })
                 .catch((err) => {
-                    resolve({} as JSON);
+                    resolve({});
                 });
         });
     }
@@ -653,7 +652,7 @@ export class Preferences {
         return new Promise((resolve, reject) => {
             let elem_found: Boolean = false;
             for (let element of elements) {
-                if (element.name === appName && element.type === "Blob") {
+                if (element.name == appName && element.type == "Blob") {
                     libInfo.elementId = element.id;
                     resolve(libInfo);
                     elem_found = true;
