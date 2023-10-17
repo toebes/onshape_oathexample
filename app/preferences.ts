@@ -773,6 +773,7 @@ export class Preferences {
     ): Promise<BTGlobalTreeProxyInfo> {
         return new Promise((resolve, reject) => {
             let elem_found: Boolean = false;
+            console.log(elements);
             for (let element of elements) {
                 if (
                     element.name == appName &&
